@@ -55,6 +55,18 @@ RULES:
 - If a user directly asks whether you are an AI or a bot, confirm honestly. Never claim to be human.
 - Never share personal information about the creator beyond what's in the reel."""
 
+VOICE_MODE_PROMPTS = {
+    "witty": "Adopt a witty, clever persona with fast wordplay and sharp banter. Keep responses short, smart, and delightfully intelligent.",
+    "funny": "Adopt a funny, humorous persona. Deliver playful punchlines, humorous takes, and lighthearted commentary while remaining helpful.",
+    "roast": "Adopt a hilarious roast persona. Give cheeky, witty comebacks and playful burns to commenter questions. Keep it funny, lighthearted, and playful without being genuinely offensive or toxic.",
+    "sarcastic": "Adopt a sarcastic persona with dry deadpan humor, cheeky irony, and witty retorts. Stay clever and funny.",
+    "helpful_expert": "Adopt an authoritative, knowledgeable expert persona. Give clear, educational, confident answers that showcase domain mastery.",
+    "casual_friend": "Adopt a warm, casual friend persona. Use friendly, conversational language like chatting with a close buddy.",
+    "professional": "Adopt a polished, articulate, professional business persona. Be polite, clear, and customer-service ready.",
+    "hype_friend": "Adopt an energetic hype-friend persona. Be super supportive, enthusiastic, exciting, and encouraging."
+}
+
+
 
 # System prompt for reel analysis
 _ANALYSIS_SYSTEM_PROMPT = """You are an expert content analyst specializing in Instagram Reels.
@@ -107,42 +119,138 @@ class AIAgentService:
         caption: str | None,
         creator_name: str,
     ) -> dict[str, Any]:
-        """Generate a structured AI summary of an Instagram Reel video."""
-        uploaded_file = None
+        """Generate a structured AI summary of an Instagram Reel video using local extraction, Groq Whisper, and OpenRouter."""
+        temp_audio = video_path.parent / f"temp_{video_path.stem}_audio.mp3"
+        temp_frames_dir = video_path.parent / f"temp_{video_path.stem}_frames"
+        temp_frames_dir.mkdir(parents=True, exist_ok=True)
+        
         try:
-            logger.info("Uploading video to Gemini File API...")
-            uploaded_file = await self.gemini_client.aio.files.upload(file=str(video_path))
-            logger.info("Video uploaded. File URI: %s", uploaded_file.uri)
+            # 1. Extract audio via MoviePy
+            logger.info("Extracting audio from video via MoviePy...")
+            has_audio = False
+            try:
+                from moviepy import VideoFileClip
+                video = VideoFileClip(str(video_path))
+                if video.audio is not None:
+                    video.audio.write_audiofile(
+                        str(temp_audio),
+                        fps=16000,
+                        codec='libmp3lame',
+                        logger=None
+                    )
+                    has_audio = True
+                video.close()
+            except Exception as e:
+                logger.warning("MoviePy audio extraction failed: %s", e)
 
-            while uploaded_file.state.name == "PROCESSING":
-                logger.info("Waiting for video processing...")
-                await asyncio.sleep(5)
-                uploaded_file = await self.gemini_client.aio.files.get(name=uploaded_file.name)
+            # 2. Extract keyframes via OpenCV
+            logger.info("Extracting 5 keyframes from video via OpenCV...")
+            frames = []
+            try:
+                import cv2
+                cap = cv2.VideoCapture(str(video_path))
+                if cap.isOpened():
+                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    if total_frames > 0:
+                        interval = total_frames // 6
+                        for i in range(5):
+                            target_frame = interval * (i + 1)
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+                            success, frame = cap.read()
+                            if success:
+                                frame_path = temp_frames_dir / f"frame_{i}.jpg"
+                                cv2.imwrite(str(frame_path), frame)
+                                frames.append(frame_path)
+                    cap.release()
+            except Exception as e:
+                logger.warning("OpenCV keyframe extraction failed: %s", e)
 
-            if uploaded_file.state.name == "FAILED":
-                raise AnalysisError("Video processing failed on Gemini servers.")
+            # 3. Audio Transcription (Groq Whisper)
+            transcript = ""
+            if has_audio and temp_audio.exists():
+                logger.info("Transcribing audio via Groq Whisper API...")
+                try:
+                    url = f"{self.groq_base_url}/audio/transcriptions"
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        with open(temp_audio, "rb") as f:
+                            files = {
+                                "file": (temp_audio.name, f, "audio/mpeg"),
+                                "model": (None, "whisper-large-v3-turbo")
+                            }
+                            resp = await client.post(
+                                url,
+                                headers={"Authorization": f"Bearer {self.groq_api_key}"},
+                                files=files
+                            )
+                        resp.raise_for_status()
+                        transcript = resp.json().get("text", "")
+                except Exception as e:
+                    logger.warning("Groq Whisper transcription failed: %s", e)
+            
+            if not transcript:
+                transcript = "[No speech / Background music only]"
 
+            # 4. Multimodal Vision Analysis via OpenRouter
+            logger.info("Calling OpenRouter multimodal API to analyze reel...")
+            import base64
+            openrouter_key = settings.OPENROUTER_API_KEY or "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"
+            
             system_instruction = _ANALYSIS_SYSTEM_PROMPT.format(creator_name=creator_name)
-            prompt = "Analyze the video."
-            if caption:
-                prompt += f"\n\nInstagram Caption:\n{caption}"
-
-            logger.info("Calling Gemini API to analyze video...")
-            response = await self.gemini_client.aio.models.generate_content(
-                model=self.gemini_model,
-                contents=[uploaded_file, prompt],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                    temperature=0.2,
-                    tools=[types.Tool(google_search=types.GoogleSearch())],
-                ),
+            
+            content = []
+            prompt = (
+                f"{system_instruction}\n\n"
+                "Analyze the provided video frames and audio transcript of this social media reel.\n\n"
+                f"Audio Transcript:\n{transcript}\n"
             )
+            if caption:
+                prompt += f"\nInstagram Caption:\n{caption}\n"
+                
+            prompt += (
+                "\nGenerate a strictly valid JSON response with the following exact keys:\n"
+                "- \"topic\": string (Main theme)\n"
+                "- \"products_mentioned\": list of strings (All brand names and accessories)\n"
+                "- \"key_points\": list of strings (3-5 bullet points)\n"
+                "- \"faq\": list of dicts with keys \"q\" (question) and \"a\" (answer)\n"
+                "- \"context\": string (Complete context description)\n"
+                "- \"creator_intent\": string (Goal of the video)\n"
+                "- \"summary\": string (Detailed narrative summary)\n\n"
+                "Do NOT wrap in markdown block, output strictly raw JSON only."
+            )
+            content.append({"type": "text", "text": prompt})
+            
+            for frame in frames:
+                if frame.exists():
+                    with open(frame, "rb") as f:
+                        encoded = base64.b64encode(f.read()).decode("utf-8")
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{encoded}"}
+                    })
 
-            if not response.text:
-                raise AnalysisError("No response returned from Gemini")
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://pilotly.ai",
+                        "X-Title": "Pilotly Production Suite"
+                    },
+                    json={
+                        "model": "google/gemini-2.5-flash",
+                        "messages": [{"role": "user", "content": content}],
+                        "max_tokens": 2000,
+                        "response_format": {"type": "json_object"}
+                    }
+                )
+                resp.raise_for_status()
+                response_text = resp.json()["choices"][0]["message"]["content"]
 
-            analysis = json.loads(response.text)
+            # Parse JSON robustly
+            analysis = self._parse_json_robust(response_text)
+            if not analysis:
+                raise AnalysisError("Invalid JSON returned from OpenRouter model")
 
             # Ensure all required keys are present
             required_keys = {
@@ -154,7 +262,7 @@ class AIAgentService:
                 for key in missing:
                     analysis[key] = [] if key in ("products_mentioned", "key_points", "faq") else ""
 
-            # Real-time Context enrichment using Grok, with Tavily fallback
+            # 5. Real-time Context enrichment using Grok, with Tavily fallback
             topic = analysis.get("topic", "")
             products = analysis.get("products_mentioned", [])
             
@@ -166,11 +274,8 @@ class AIAgentService:
                 )
                 
                 realtime_data = ""
-                # Try Grok first
                 if self.xai_api_key:
                     realtime_data = await self._fetch_from_grok(search_query)
-                
-                # Fallback to Tavily if Grok failed or is not configured
                 if not realtime_data and settings.TAVILY_API_KEY:
                     realtime_data = await self._fetch_from_tavily(search_query)
                 
@@ -178,13 +283,11 @@ class AIAgentService:
                     analysis["realtime_context"] = realtime_data
                     orig_context = analysis.get("context", "")
                     analysis["context"] = f"{orig_context}\n\n[Real-time Search Context]: {realtime_data}".strip()
-                    logger.info("Successfully merged real-time context into reel analysis")
 
             return analysis
 
         except Exception as exc:
             logger.error("Reel analysis failed: %s", exc, exc_info=True)
-            # Return error summary instead of raising, so the error reason is stored in the database
             return {
                 "error": f"Summary generation failed: {str(exc)}",
                 "topic": "Failed",
@@ -198,12 +301,17 @@ class AIAgentService:
             }
 
         finally:
-            if uploaded_file:
-                try:
-                    await self.gemini_client.aio.files.delete(name=uploaded_file.name)
-                    logger.info("Deleted video file from Gemini.")
-                except Exception as e:
-                    logger.warning("Failed to delete video file from Gemini: %s", e)
+            # Cleanup temp files
+            if temp_audio.exists():
+                try: temp_audio.unlink()
+                except Exception: pass
+            if temp_frames_dir.exists():
+                for f in temp_frames_dir.glob("*"):
+                    try: f.unlink()
+                    except Exception: pass
+                try: temp_frames_dir.rmdir()
+                except Exception: pass
+
 
     # ------------------------------------------------------------------
     # Groq Chat Completion (direct httpx call)
@@ -370,6 +478,12 @@ RULES:
 - If a user directly asks whether you are an AI or a bot, confirm honestly. Never claim to be human.
 - Never share personal information about the creator beyond what's in the reel.
 """
+
+                mode = style_json.get("mode") or style_json.get("tone_mode") or ""
+                mode_instruction = VOICE_MODE_PROMPTS.get(mode.lower().strip(), "")
+                if mode_instruction:
+                    system_prompt += f"\nVOICE MODE INSTRUCTION ({mode.upper()}): {mode_instruction}\n"
+
 
                 if sig_phrases:
                     system_prompt += f"- Consider using these signature phrases naturally: {', '.join(sig_phrases)}\n"

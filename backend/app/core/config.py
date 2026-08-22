@@ -25,12 +25,12 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     # ── Meta (Facebook / Instagram) ─────────────────────────────────────
-    # OAuth credentials — optional during testing, required for production
-    META_APP_ID: str = ""
-    META_APP_SECRET: str = ""
-    META_VERIFY_TOKEN: str = ""
-    META_REDIRECT_URI: str = ""
+    META_APP_ID: str = "1925137338445520"
+    META_APP_SECRET: str = "99a029b28be71b189990343d63691cbb"
+    META_VERIFY_TOKEN: str = "pilotly_test_123"
+    META_REDIRECT_URI: str = "https://pilotly-api-server-543261599288.us-central1.run.app/api/v1/auth/callback"
     FRONTEND_URL: str = "https://crekai-gamma.vercel.app"
+
 
     # ── Direct Testing Token ─────────────────────────────────────────────
     # Set these to bypass OAuth during development/testing.
@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     XAI_API_KEY: str = ""            # xAI (Grok API key)
     GEMINI_API_KEY: str = ""         # Google Gemini 2.5 Flash API key
     TAVILY_API_KEY: str = ""         # Web search API key
+    OPENROUTER_API_KEY: str = "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"
+
 
     # ── Security ────────────────────────────────────────────────────────
     ENCRYPTION_KEY: str  # Fernet key for token-at-rest encryption

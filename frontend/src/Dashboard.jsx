@@ -22,12 +22,6 @@ const IconDashboard = () => (
   </svg>
 );
 
-const IconInbox = () => (
-  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0l-3.586 3.586a2 2 0 01-2.828 0L6 13m12 2a2 2 0 01-2 2H8a2 2 0 01-2-2" />
-  </svg>
-);
-
 const IconAutomations = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -48,7 +42,7 @@ const IconSignOut = () => (
 );
 
 const IconGlobe = () => (
-  <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: 'var(--accent-light)' }}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
   </svg>
 );
@@ -64,6 +58,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState(null); // null | 'ai-reply'
   const [inboxSubFilter, setInboxSubFilter] = useState('pending'); // 'pending' | 'posted'
+  const [showScopePromptModal, setShowScopePromptModal] = useState(false);
 
 
   // Real Backend State
@@ -145,10 +140,16 @@ export default function Dashboard({ user, onSignOut }) {
     }
   };
 
-  // Connect via Real Meta OAuth
+  // Connect via Real Meta OAuth (Basic Scope)
   const handleConnectInstagram = () => {
     const baseUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1').replace('/api/v1', '');
-    window.location.href = `${baseUrl}/api/v1/auth/login`;
+    window.location.href = `${baseUrl}/api/v1/auth/login?scope_type=basic`;
+  };
+
+  // Re-connect with Advanced Scopes for Comment Automation
+  const handleConnectAdvancedInstagram = () => {
+    const baseUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1').replace('/api/v1', '');
+    window.location.href = `${baseUrl}/api/v1/auth/login?scope_type=advanced`;
   };
 
   // Trigger Reel Analysis (Gemini 2.5 Flash + Grok)
@@ -186,13 +187,8 @@ export default function Dashboard({ user, onSignOut }) {
       await approveReply(commentId, textToSend);
       showNotification('Success: Reply approved and posted to Instagram');
       
-      // Update local state is_processed to immediately remove it from Pending Queue list
-      setApiComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, is_processed: true } : c))
-      );
-      
-      // Refresh list to update DB sync states
-      setTimeout(loadDashboardData, 1000);
+      // Remove from local state immediately (do not wait for refetch)
+      setApiComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
       showNotification(`Error: ${err.message || 'Failed to post reply'}`);
     }
@@ -204,13 +200,13 @@ export default function Dashboard({ user, onSignOut }) {
       await rejectReply(commentId);
       showNotification('Success: Reply draft rejected');
       
-      // Keep in list but marked as processed or remove from local inbox
+      // Remove from local state immediately
       setApiComments((prev) => prev.filter((c) => c.id !== commentId));
-      setTimeout(loadDashboardData, 1000);
     } catch (err) {
       showNotification(`Error: ${err.message || 'Failed to reject reply'}`);
     }
   };
+
 
   // Generate AI Reply
   const handleGenerateReply = async (commentId) => {
@@ -305,15 +301,15 @@ export default function Dashboard({ user, onSignOut }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center text-slate-400 font-bold text-xs uppercase tracking-widest gap-4">
+      <div style={{ background: 'var(--bg-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
         <IconSync />
-        <span className="animate-pulse">Loading Engine Dashboard</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', animation: 'pulse 2s infinite' }}>Loading Engine Dashboard</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col md:flex-row antialiased">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex flex-col antialiased">
       {/* Toast Notification */}
       <AnimatePresence>
         {actionMessage && (
@@ -321,315 +317,307 @@ export default function Dashboard({ user, onSignOut }) {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl border font-bold text-xs flex items-center gap-3 ${
-              actionMessage.toLowerCase().startsWith('error')
-                ? 'bg-red-950/80 border-red-500/30 text-red-200'
-                : 'bg-[#0F172A] border-purple-500/20 text-purple-200 shadow-purple-500/5'
-            }`}
+            style={{
+              position: 'fixed', top: 24, right: 24, zIndex: 50,
+              padding: '12px 16px', borderRadius: 'var(--radius-card)',
+              border: `1px solid ${actionMessage.toLowerCase().startsWith('error') ? 'rgba(239,68,68,0.3)' : 'rgba(124,58,237,0.2)'}`,
+              background: actionMessage.toLowerCase().startsWith('error') ? 'rgba(239,68,68,0.1)' : 'var(--bg-card)',
+              display: 'flex', alignItems: 'center', gap: 10,
+              fontSize: 12, fontWeight: 600,
+              color: actionMessage.toLowerCase().startsWith('error') ? 'var(--error)' : 'var(--accent-light)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${actionMessage.toLowerCase().startsWith('error') ? 'bg-red-500' : 'bg-purple-500'}`} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: actionMessage.toLowerCase().startsWith('error') ? 'var(--error)' : 'var(--accent)' }} />
             <span>{actionMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-[#090D1A] border-b md:border-b-0 md:border-r border-slate-800/60 p-5 flex flex-col justify-between flex-shrink-0 z-30">
-        <div className="space-y-8">
-          <div className="flex items-center justify-between px-2">
-            <span className="font-black text-xl tracking-tight text-white flex items-center gap-1.5">
-              Pilotly<span className="text-purple-500">.ai</span>
-            </span>
-            <span
-              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1.5 border ${
-                isInstagramConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-              }`}
-            >
-              <span className={`w-1 h-1 rounded-full ${isInstagramConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              {isInstagramConnected ? 'Linked' : 'Not Linked'}
-            </span>
-          </div>
+      {/* ═══════════════ PRIMARY TOP HEADER ═══════════════ */}
+      <header
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+          width: '100%',
+          height: 64,
+          background: 'var(--bg-sidebar)',
+          borderBottom: '1px solid var(--border)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+        }}
+      >
+        {/* Left: Logo + Navigation Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+          <span
+            style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            Pilotly<span style={{ color: 'var(--accent)' }}>.ai</span>
+          </span>
 
-          <nav className="space-y-1.5">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'dashboard'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/10 border border-purple-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40 border border-transparent'
-              }`}
-            >
-              <IconDashboard />
-              <span>Dashboard & Feed</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('my-automations')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'my-automations'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/10 border border-purple-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40 border border-transparent'
-              }`}
-            >
-              <IconAutomations />
-              <span>My Automations</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'settings'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/10 border border-purple-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40 border border-transparent'
-              }`}
-            >
-              <IconSettings />
-              <span>Settings</span>
-            </button>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {[
+              { id: 'dashboard', label: 'Dashboard' },
+              { id: 'my-automations', label: 'Automations' },
+              { id: 'settings', label: 'Settings' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                style={{
+                  height: 36,
+                  padding: '0 16px',
+                  borderRadius: 'var(--radius-button)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  border: activeTab === item.id ? '1px solid rgba(124,58,237,0.3)' : '1px solid transparent',
+                  background: activeTab === item.id ? 'rgba(124,58,237,0.15)' : 'transparent',
+                  color: activeTab === item.id ? 'var(--text-primary)' : 'var(--text-muted)',
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
         </div>
 
-        {/* Profile Card */}
-        <div className="pt-4 border-t border-slate-800/60 flex items-center justify-between px-1">
-          <div className="flex items-center gap-3">
+        {/* Right: Profile & Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {isInstagramConnected && (
+            <span className="ds-badge ds-badge-success" style={{ fontSize: 11 }}>
+              ● Connected
+            </span>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 12px', background: 'var(--bg-card)', borderRadius: 999, border: '1px solid var(--border)' }}>
             <img
               src={apiUser?.profile_picture_url || user?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
               alt="Profile"
-              className="w-9 h-9 rounded-full border border-purple-500/20 object-cover"
+              style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }}
             />
-            <div className="text-left overflow-hidden">
-              <div className="text-xs font-bold text-white truncate max-w-[110px]">
-                {apiUser?.username ? `@${apiUser.username}` : 'Creator Account'}
-              </div>
-              <div className="text-[10px] text-slate-500 truncate max-w-[110px]">{user?.email || 'creator@gmail.com'}</div>
-            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {apiUser?.username ? `@${apiUser.username}` : 'Creator'}
+            </span>
           </div>
-          <button onClick={onSignOut} className="text-slate-400 hover:text-red-400 transition-colors p-1.5 rounded-lg">
+          <button
+            onClick={onSignOut}
+            style={{
+              color: 'var(--text-muted)',
+              background: 'none',
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-button)',
+              fontSize: 12,
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'all 0.15s',
+            }}
+          >
             <IconSignOut />
+            <span className="hidden sm:inline">Sign Out</span>
           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* MAIN DISPLAY CONTENT AREA */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-6xl mx-auto w-full space-y-6">
+      {/* ═══════════════ MAIN CONTENT AREA ═══════════════ */}
+      <main style={{ flex: 1, padding: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
 
         {/* ACCOUNT NOT CONNECTED ALERT BANNER */}
         {!isInstagramConnected && (
-          <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                Action Required: Instagram Business Account Not Linked
-              </h3>
-              <p className="text-xs text-slate-400">
-                To fetch Reels and trigger intelligent replies, authenticate via Meta OAuth.
-              </p>
+          <div className="ds-card" style={{ borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} className="sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Action Required: Instagram Business Account Not Linked
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  To fetch Reels and trigger intelligent replies, authenticate via Meta OAuth.
+                </p>
+              </div>
+              <button onClick={handleConnectInstagram} className="ds-btn-primary" style={{ flexShrink: 0 }}>
+                Connect Instagram via Meta
+              </button>
             </div>
-            <button
-              onClick={handleConnectInstagram}
-              className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all flex-shrink-0"
-            >
-              Connect Instagram via Meta
-            </button>
           </div>
         )}
 
-        {/* TAB 1: DASHBOARD & REELS FEED */}
+        {/* ═══════════════ TAB 1: DASHBOARD & REELS FEED ═══════════════ */}
         {activeTab === 'dashboard' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            {/* Claude / AI-Style Warm Greeting */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-                  <span>
-                    {(() => {
-                      const hour = new Date().getHours();
-                      if (hour < 12) return 'Good morning';
-                      if (hour < 18) return 'Good afternoon';
-                      return 'Good evening';
-                    })()}, {apiUser?.full_name?.split(' ')[0] || (apiUser?.username ? `@${apiUser.username}` : 'Creator')}
-                  </span>
-                  <span className="inline-block animate-bounce">👋</span>
-                </h1>
-                <p className="text-xs text-slate-400 mt-1">
-                  Here is your live Instagram profile overview, content feed, and AI engagement automation status.
-                </p>
-              </div>
-              <div className="text-right shrink-0 hidden sm:block">
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-lg">
-                  📅 {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </span>
-              </div>
-            </div>
+          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
 
-            {/* Instagram Profile Card Header */}
-            <div className="bg-gradient-to-r from-[#0F172A] via-[#1E1B4B]/40 to-[#0F172A] rounded-2xl p-6 border border-slate-800/80 shadow-xl space-y-5">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                <div className="flex items-start sm:items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-500 p-0.5 shadow-lg shrink-0">
+            {/* Creator Profile Card */}
+            <div className="ds-card" style={{ padding: 'var(--card-padding)' }}>
+              {/* Top row: Avatar + Name + Sync */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  {/* Avatar */}
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), #EC4899, #F59E0B)', padding: 2, flexShrink: 0 }}>
                     <img
                       src={apiUser?.profile_picture_url || user?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
                       alt="Profile"
-                      className="w-full h-full rounded-full object-cover border-2 border-[#0F172A]"
+                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-black text-white">
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
                         {apiUser?.full_name || (apiUser?.username ? `@${apiUser.username}` : 'Instagram Profile')}
                       </h1>
                       {apiUser?.username && (
-                        <span className="text-xs text-slate-400 font-normal">@{apiUser.username}</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>@{apiUser.username}</span>
                       )}
                       {isInstagramConnected && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
-                          ● Connected
-                        </span>
+                        <span className="ds-badge ds-badge-success">● Connected</span>
                       )}
                     </div>
-
-                    {/* Account Bio */}
+                    {/* Bio */}
                     {apiUser?.biography ? (
-                      <p className="text-xs text-slate-200 max-w-xl leading-relaxed bg-slate-950/80 px-3.5 py-2 rounded-xl border border-purple-500/20 font-medium">
-                        📝 <span className="text-slate-300 ml-1">{apiUser.biography}</span>
+                      <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 6, maxWidth: 500, lineHeight: 1.5 }}>
+                        {apiUser.biography}
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-500 italic">No biography listed on Instagram profile</p>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 4 }}>No biography listed on Instagram profile</p>
                     )}
                   </div>
                 </div>
 
-
+                {/* Sync Button (ghost style) */}
                 <button
                   onClick={handleSyncReels}
-                  disabled={syncing}
-                  className={`px-4 py-2.5 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 shrink-0 ${
-                    isInstagramConnected
-                      ? 'bg-purple-600 hover:bg-purple-500 border-purple-500/20 text-white shadow-lg'
-                      : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                  }`}
+                  disabled={syncing || !isInstagramConnected}
+                  className="ds-btn-ghost"
+                  style={{ flexShrink: 0, opacity: isInstagramConnected ? 1 : 0.4 }}
                 >
                   {syncing ? <IconSync /> : null}
-                  <span>{syncing ? 'Syncing reels' : 'Sync reels from Meta'}</span>
+                  <span>{syncing ? 'Syncing reels…' : 'Sync reels from Meta'}</span>
                 </button>
               </div>
 
-              {/* Followers, Following & Posts Stats Bar */}
-              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-800/60">
-                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/60 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Posts / Reels</div>
-                  <div className="text-lg font-black text-white">{apiUser?.media_count ?? apiReels.length}</div>
-                </div>
-
-                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/60 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Followers</div>
-                  <div className="text-lg font-black text-purple-300">{apiUser?.followers_count ?? 0}</div>
-                </div>
-
-                <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/60 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Following</div>
-                  <div className="text-lg font-black text-slate-300">{apiUser?.follows_count ?? 0}</div>
-                </div>
+              {/* Stats Pills Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--element-gap)', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                {[
+                  { label: 'Posts', value: apiUser?.media_count ?? apiReels.length },
+                  { label: 'Followers', value: apiUser?.followers_count ?? 0 },
+                  { label: 'Following', value: apiUser?.follows_count ?? 0 },
+                ].map((stat) => (
+                  <div key={stat.label} style={{ background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
+            {/* Reels Section Header */}
+            <div className="ds-section-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>PROFILE REELS FEED</span>
+                <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{apiReels.length}</span>
+              </div>
+              <span className="ds-badge ds-badge-purple">Gemini multimodal analysis</span>
+            </div>
 
             {/* Reels Grid */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
-                <h2 className="text-sm font-black text-white uppercase tracking-wider">
-                  Profile Reels Feed
-                </h2>
-                <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-md">
-                  Gemini multimodal analysis
-                </span>
+            {apiReels.length === 0 ? (
+              <div className="ds-card" style={{ padding: 48, textAlign: 'center' }}>
+                <svg style={{ width: 40, height: 40, color: 'var(--text-muted)', margin: '0 auto 16px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>No reels found in data store.</p>
+                <button onClick={handleSyncReels} className="ds-btn-primary-sm">
+                  Sync Reels
+                </button>
               </div>
-
-              {apiReels.length === 0 ? (
-                <div className="bg-[#090D1A] border border-slate-800/80 rounded-2xl p-12 text-center text-slate-500 space-y-4">
-                  <p className="text-xs">No reels found in data store.</p>
-                  <button
-                    onClick={handleSyncReels}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl"
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 'var(--section-gap)' }}>
+                {apiReels.map((reel) => (
+                  <div
+                    key={reel.id || reel.media_id}
+                    className="ds-card"
+                    style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}
                   >
-                    Sync Reels
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {apiReels.map((reel) => (
-                    <div
-                      key={reel.id || reel.media_id}
-                      className="bg-[#090D1A] rounded-2xl border border-slate-800/80 hover:border-purple-500/20 overflow-hidden shadow-lg transition-all group"
-                    >
-                      <div className="relative aspect-[4/3] bg-slate-950 overflow-hidden">
-                        <img
-                          src={reel.thumbnail_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'}
-                          alt="Thumbnail"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-                        <span className={`absolute top-3 left-3 bg-[#030712]/80 backdrop-blur-md border text-[9px] font-bold px-2 py-0.5 rounded-md ${
-                          reel.is_analyzed
-                            ? reel.summary?.analysis_model === 'failed'
-                              ? 'text-red-400 border-red-500/20'
-                              : 'text-purple-400 border-purple-500/20'
-                            : 'text-amber-400 border-amber-500/20 animate-pulse'
-                        }`}>
-                          {reel.is_analyzed
-                            ? reel.summary?.analysis_model === 'failed'
-                              ? 'Analysis Failed'
-                              : 'Analyzed'
-                            : 'Sync Pending'}
-                        </span>
-                        
-                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] text-slate-300 font-bold bg-slate-950/60 backdrop-blur-sm py-1 px-2.5 rounded-lg">
-                          <span>Likes: {reel.like_count || 0}</span>
-                          <span>Comments: {reel.comments_count || 0}</span>
-                        </div>
+                    {/* Thumbnail */}
+                    <div style={{ position: 'relative', height: 180, overflow: 'hidden' }}>
+                      <img
+                        src={reel.thumbnail_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'}
+                        alt="Thumbnail"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-card) var(--radius-card) 0 0', transition: 'transform 0.3s' }}
+                      />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
+
+                      {/* Analysis Badge */}
+                      <span
+                        className={`ds-badge ${reel.is_analyzed ? (reel.summary?.analysis_model === 'failed' ? 'ds-badge-error' : 'ds-badge-success') : 'ds-badge-muted'}`}
+                        style={{ position: 'absolute', top: 10, left: 10, fontSize: 10 }}
+                      >
+                        {reel.is_analyzed
+                          ? reel.summary?.analysis_model === 'failed'
+                            ? 'Failed'
+                            : '● Analyzed'
+                          : 'Not Analyzed'}
+                      </span>
+                    </div>
+
+                    {/* Card Body */}
+                    <div style={{ padding: 'var(--card-padding)' }}>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 10 }}>
+                        {reel.caption || 'No caption provided'}
+                      </p>
+
+                      {/* Likes + Comments */}
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                        <span>♥ {reel.like_count || 0}</span>
+                        <span>💬 {reel.comments_count || 0}</span>
                       </div>
 
-                      <div className="p-4 space-y-4">
-                        <p className="text-xs font-semibold text-slate-300 line-clamp-2 min-h-[2rem] leading-relaxed">
-                          {reel.caption || 'No caption provided'}
-                        </p>
-                        
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
-                          <button
-                            onClick={() => handleOpenReelDetail(reel.id)}
-                            disabled={fetchingReelDetail}
-                            className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors"
-                          >
-                            {fetchingReelDetail ? 'Loading summary' : 'View AI summary'}
-                          </button>
-
-                          <button
-                            onClick={(e) => handleAnalyzeReel(e, reel.id)}
-                            className="text-[10px] font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/20 px-3 py-1 rounded-lg transition-all"
-                          >
-                            Analyze
-                          </button>
-                        </div>
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => handleOpenReelDetail(reel.id)}
+                          disabled={fetchingReelDetail}
+                          className="ds-btn-ghost-sm"
+                          style={{ flex: 1 }}
+                        >
+                          {fetchingReelDetail ? 'Loading…' : 'View Summary'}
+                        </button>
+                        <button
+                          onClick={(e) => handleAnalyzeReel(e, reel.id)}
+                          className="ds-btn-primary-sm"
+                          style={{ flex: 1 }}
+                        >
+                          Analyze
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
 
-        {/* TAB 2: MY AUTOMATIONS */}
+        {/* ═══════════════ TAB 2: MY AUTOMATIONS ═══════════════ */}
         {activeTab === 'my-automations' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
             {selectedAutomation === 'ai-reply' ? (
-              <div className="space-y-6">
-                {/* Back button & top bar */}
-                <div className="flex items-center justify-between">
+              /* ──── AUTOMATION DETAIL VIEW ──── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                {/* Header Row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <button
                     onClick={() => setSelectedAutomation(null)}
-                    className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -637,352 +625,329 @@ export default function Dashboard({ user, onSignOut }) {
                     <span>Back to My Automations</span>
                   </button>
 
-                  <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-bold uppercase px-3 py-1 rounded-full border ${
-                      apiUser?.auto_reply_enabled
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className={`ds-badge ${apiUser?.auto_reply_enabled ? 'ds-badge-success' : 'ds-badge-muted'}`}>
                       {apiUser?.auto_reply_enabled ? '● Active' : '○ Paused'}
                     </span>
-                    <button
-                      onClick={toggleAutoReplySetting}
-                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all"
-                    >
+                    <button onClick={toggleAutoReplySetting} className="ds-btn-ghost" style={{ padding: '8px 16px', fontSize: 12 }}>
                       {apiUser?.auto_reply_enabled ? 'Pause Automation' : 'Enable Automation'}
                     </button>
+                    <button onClick={() => setShowSetupWizard(true)} className="ds-btn-primary" style={{ padding: '8px 16px', fontSize: 12 }}>
+                      Edit Setup
+                    </button>
                   </div>
                 </div>
 
-                {/* Main Header Banner */}
-                <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xl">🤖</span>
-                      <h1 className="text-xl font-black text-white">AI Reply for Engagement</h1>
+                {/* Automation Title Card */}
+                <div className="ds-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg style={{ width: 20, height: 20, color: 'var(--accent-light)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      Auto-reply to Instagram comments using Gemini reel context + Groq Qwen LLM.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowSetupWizard(true)}
-                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 shrink-0"
-                  >
-                    <span>✍️</span>
-                    <span>Edit Voice & Setup Wizard</span>
-                  </button>
-                </div>
-
-                {/* SECTION 1: REAL ANALYTICS METRICS (100% Real DB Data) */}
-                <div>
-                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">Live Automation Analytics</h2>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-5 space-y-1 shadow-md">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Comments</span>
-                      <div className="text-2xl font-black text-white">{apiComments.length}</div>
-                      <div className="text-[10px] text-slate-500">Synced via Instagram webhook</div>
-                    </div>
-                    <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-5 space-y-1 shadow-md">
-                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Awaiting Approval</span>
-                      <div className="text-2xl font-black text-amber-300">{apiComments.filter(c => !c.is_processed).length}</div>
-                      <div className="text-[10px] text-slate-500">Pending drafts in queue</div>
-                    </div>
-                    <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-5 space-y-1 shadow-md">
-                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Posted Replies</span>
-                      <div className="text-2xl font-black text-emerald-400">{apiComments.filter(c => c.is_processed).length}</div>
-                      <div className="text-[10px] text-slate-500">Published to Instagram</div>
-                    </div>
-                    <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-5 space-y-1 shadow-md">
-                      <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Synced Reels</span>
-                      <div className="text-2xl font-black text-purple-300">{apiReels.length}</div>
-                      <div className="text-[10px] text-slate-500">{apiReels.filter(r => r.is_analyzed).length} AI Analyzed</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 2: CONFIGURATION OVERVIEW (All Saved Voice Profile Settings) */}
-                <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-6 space-y-6 shadow-md">
-                  <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
                     <div>
-                      <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <span>⚙️</span> Active Voice & Persona Configuration
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Settings currently used by Qwen AI when generating replies for @{apiUser?.username || 'your account'}.
+                      <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>AI Reply for Engagement</h1>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        Auto-reply to Instagram comments using Gemini reel context + Groq Qwen LLM.
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                {/* Analytics Row (4 Stat Cards) */}
+                <div className="ds-section-header" style={{ marginBottom: -8 }}>
+                  <span>LIVE AUTOMATION ANALYTICS</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--element-gap)' }}>
+                  <div className="ds-stat-card">
+                    <div className="ds-stat-label">Total Comments</div>
+                    <div className="ds-stat-number">{apiComments.length}</div>
+                    <div className="ds-stat-sub">Synced via Instagram webhook</div>
+                  </div>
+                  <div className="ds-stat-card">
+                    <div className="ds-stat-label" style={{ color: 'var(--warning)' }}>Awaiting Approval</div>
+                    <div className="ds-stat-number" style={{ color: 'var(--warning)' }}>{apiComments.filter(c => !c.is_processed).length}</div>
+                    <div className="ds-stat-sub">Pending drafts in queue</div>
+                  </div>
+                  <div className="ds-stat-card">
+                    <div className="ds-stat-label" style={{ color: 'var(--success)' }}>Posted Replies</div>
+                    <div className="ds-stat-number" style={{ color: 'var(--success)' }}>{apiComments.filter(c => c.is_processed).length}</div>
+                    <div className="ds-stat-sub">Published to Instagram</div>
+                  </div>
+                  <div className="ds-stat-card">
+                    <div className="ds-stat-label" style={{ color: 'var(--accent-light)' }}>Synced Reels</div>
+                    <div className="ds-stat-number" style={{ color: 'var(--accent-light)' }}>{apiReels.length}</div>
+                    <div className="ds-stat-sub">{apiReels.filter(r => r.is_analyzed).length} AI Analyzed</div>
+                  </div>
+                </div>
+
+                {/* Configuration Section */}
+                {(() => {
+                  let styleObj = {};
+                  try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
+                  
+                  return (
+                    <>
+                      <div className="ds-section-header" style={{ marginBottom: -8 }}>
+                        <span>ACTIVE VOICE & PERSONA CONFIGURATION</span>
+                        <button
+                          onClick={() => setShowSetupWizard(true)}
+                          style={{ fontSize: 12, color: 'var(--accent-light)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                        >
+                          Edit Configuration →
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--element-gap)' }}>
+                        {/* Identity & Niche */}
+                        <div className="ds-card">
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>1. Identity & Niche</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Business Name:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4 }}>{styleObj.business_name || apiUser?.full_name || apiUser?.username || 'N/A'}</span></div>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Industry:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.industry || 'General Content Creator'}</span></div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', display: 'block' }}>Target Audience:</span>
+                              <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.audience || 'Not specified'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Voice & Persona */}
+                        <div className="ds-card">
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>2. Voice & Persona</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Persona:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4, textTransform: 'capitalize' }}>{styleObj.persona || 'Founder'}</span></div>
+                            <div><span style={{ color: 'var(--text-muted)' }}>Formality Level:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.formality || 3} / 5</span></div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', display: 'block' }}>Tone Description:</span>
+                              <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.tone_description || 'Friendly, engaging, and clear.'}</p>
+                            </div>
+                            {styleObj.signature_phrases?.length > 0 && (
+                              <div style={{ paddingTop: 4 }}>
+                                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 12 }}>Signature Phrases:</span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  {styleObj.signature_phrases.map((phrase, i) => (
+                                    <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{phrase}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Knowledge Base (full width) */}
+                      <div className="ds-card">
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>3. Knowledge Base & FAQs</div>
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
+                      </div>
+
+                      {/* Safety & Guardrails (full width) */}
+                      <div className="ds-card">
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>4. Safety & Guardrails</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Avoid Words:</span>
+                            {styleObj.avoid_words?.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {styleObj.avoid_words.map((w, i) => (
+                                  <span key={i} className="ds-badge ds-badge-error" style={{ fontSize: 10 }}>{w}</span>
+                                ))}
+                              </div>
+                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Skip Public Topics:</span>
+                            {styleObj.avoid_topics?.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {styleObj.avoid_topics.map((t, i) => (
+                                  <span key={i} className="ds-badge ds-badge-warning" style={{ fontSize: 10 }}>{t}</span>
+                                ))}
+                              </div>
+                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Redirect to DM:</span>
+                            {styleObj.dm_topics?.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {styleObj.dm_topics.map((d, i) => (
+                                  <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{d}</span>
+                                ))}
+                              </div>
+                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Active Settings Row (full width) */}
+                      <div className="ds-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Reply Mode:</span>
+                          <span className="ds-badge ds-badge-purple">{styleObj.reply_mode || 'Draft'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Auto-Analyze:</span>
+                          <span className={`ds-badge ${styleObj.auto_analyze_reels !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                            {styleObj.auto_analyze_reels !== false ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Real-Time:</span>
+                          <span className={`ds-badge ${styleObj.use_realtime_data !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                            {styleObj.use_realtime_data !== false ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {/* Comment Stream Section */}
+                <div className="ds-card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {/* Tab Bar (underline style) */}
+                  <div className="ds-tab-bar" style={{ padding: '0 var(--card-padding)' }}>
                     <button
-                      onClick={() => setShowSetupWizard(true)}
-                      className="text-xs text-purple-400 hover:text-purple-300 font-bold transition-colors flex items-center gap-1"
+                      onClick={() => setInboxSubFilter('pending')}
+                      className={`ds-tab ${inboxSubFilter === 'pending' ? 'ds-tab-active' : ''}`}
                     >
-                      <span>Edit Configuration</span>
-                      <span>→</span>
+                      Pending Queue ({apiComments.filter(c => !c.is_processed).length})
+                    </button>
+                    <button
+                      onClick={() => setInboxSubFilter('posted')}
+                      className={`ds-tab ${inboxSubFilter === 'posted' ? 'ds-tab-active' : ''}`}
+                    >
+                      Posted History ({apiComments.filter(c => c.is_processed).length})
                     </button>
                   </div>
 
-                  {(() => {
-                    let styleObj = {};
-                    try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
-                    
-                    return (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-                        {/* Identity & Niche */}
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-2">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">1. Identity & Niche</div>
-                          <div><span className="text-slate-500">Business Name:</span> <span className="font-bold text-white ml-1">{styleObj.business_name || apiUser?.full_name || apiUser?.username || 'N/A'}</span></div>
-                          <div><span className="text-slate-500">Industry:</span> <span className="font-bold text-slate-200 ml-1">{styleObj.industry || 'General Content Creator'}</span></div>
-                          <div>
-                            <span className="text-slate-500 block">Target Audience:</span>
-                            <p className="text-slate-300 mt-1 leading-relaxed">{styleObj.audience || 'Not specified'}</p>
-                          </div>
-                        </div>
-
-                        {/* Voice & Tone */}
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-2">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">2. Voice & Persona</div>
-                          <div><span className="text-slate-500">Persona:</span> <span className="font-bold text-white capitalize ml-1">{styleObj.persona || 'Founder'}</span></div>
-                          <div><span className="text-slate-500">Formality Level:</span> <span className="font-bold text-slate-200 ml-1">{styleObj.formality || 3} / 5</span></div>
-                          <div>
-                            <span className="text-slate-500 block">Tone Description:</span>
-                            <p className="text-slate-300 mt-1 leading-relaxed">{styleObj.tone_description || 'Friendly, engaging, and clear.'}</p>
-                          </div>
-                          {styleObj.signature_phrases?.length > 0 && (
-                            <div className="pt-1">
-                              <span className="text-slate-500 block mb-1">Signature Phrases:</span>
-                              <div className="flex flex-wrap gap-1">
-                                {styleObj.signature_phrases.map((phrase, i) => (
-                                  <span key={i} className="bg-purple-950/60 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded text-[10px]">{phrase}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Knowledge Base */}
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-2 md:col-span-2">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">3. Knowledge Base & FAQs</div>
-                          <p className="text-slate-300 leading-relaxed whitespace-pre-line">{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
-                        </div>
-
-                        {/* Safety & Guardrails */}
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-3 md:col-span-2">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400">4. Safety & Guardrails</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div>
-                              <span className="text-slate-500 block mb-1 text-[10px]">Avoid Words:</span>
-                              {styleObj.avoid_words?.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {styleObj.avoid_words.map((w, i) => (
-                                    <span key={i} className="bg-red-950/40 text-red-300 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">{w}</span>
-                                  ))}
-                                </div>
-                              ) : <span className="text-slate-600">None</span>}
-                            </div>
-
-                            <div>
-                              <span className="text-slate-500 block mb-1 text-[10px]">Skip Public Topics:</span>
-                              {styleObj.avoid_topics?.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {styleObj.avoid_topics.map((t, i) => (
-                                    <span key={i} className="bg-amber-950/40 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded text-[10px]">{t}</span>
-                                  ))}
-                                </div>
-                              ) : <span className="text-slate-600">None</span>}
-                            </div>
-
-                            <div>
-                              <span className="text-slate-500 block mb-1 text-[10px]">Redirect to DM:</span>
-                              {styleObj.dm_topics?.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {styleObj.dm_topics.map((d, i) => (
-                                    <span key={i} className="bg-blue-950/40 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded text-[10px]">{d}</span>
-                                  ))}
-                                </div>
-                              ) : <span className="text-slate-600">None</span>}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Automation Options */}
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-2 md:col-span-2 flex flex-wrap items-center justify-between gap-4 text-[11px]">
-                          <div>
-                            <span className="text-slate-500">Reply Mode:</span>
-                            <span className="font-bold text-purple-300 ml-1.5 uppercase tracking-wider">{styleObj.reply_mode || 'Draft'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Auto-Analyze Reels:</span>
-                            <span className="font-bold text-emerald-400 ml-1.5">{styleObj.auto_analyze_reels !== false ? 'Enabled' : 'Disabled'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Real-Time Web Search:</span>
-                            <span className="font-bold text-emerald-400 ml-1.5">{styleObj.use_realtime_data !== false ? 'Enabled' : 'Disabled'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* SECTION 3: LIVE COMMENT STREAM & APPROVAL QUEUE */}
-                <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-6 space-y-4 shadow-md">
-                  <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
-                    <div>
-                      <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <span>📥</span> Live Comment & Approval Stream
-                      </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">Review, edit, and post AI responses directly to Instagram.</p>
-                    </div>
-
-                    <div className="bg-slate-950 p-0.5 rounded-xl border border-slate-800 flex items-center">
-                      <button
-                        onClick={() => setInboxSubFilter('pending')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                          inboxSubFilter === 'pending'
-                            ? 'bg-purple-600 text-white'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Pending Queue ({apiComments.filter(c => !c.is_processed).length})
-                      </button>
-                      <button
-                        onClick={() => setInboxSubFilter('posted')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                          inboxSubFilter === 'posted'
-                            ? 'bg-purple-600 text-white'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Posted History ({apiComments.filter(c => c.is_processed).length})
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Render Comments */}
-                  {(() => {
-                    const filtered = apiComments.filter(c => inboxSubFilter === 'pending' ? !c.is_processed : c.is_processed);
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="py-12 text-center text-xs text-slate-500">
-                          No {inboxSubFilter === 'pending' ? 'pending comments waiting for approval' : 'posted comments history yet'}.
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-4">
-                        {filtered.map((comment) => (
-                          <div key={comment.id} className="bg-slate-950 rounded-xl border border-slate-800/80 p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-white text-xs">@{comment.commenter_username || 'user'}</span>
-                                <span className="text-[10px] text-slate-500">{new Date(comment.created_at).toLocaleString()}</span>
-                              </div>
-                              <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${
-                                comment.is_processed ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300'
-                              }`}>
-                                {comment.is_processed ? 'Posted' : 'Pending Review'}
-                              </span>
-                            </div>
-
-                            <p className="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/40">
-                              "{comment.text}"
+                  {/* Comment Cards */}
+                  <div style={{ padding: 'var(--card-padding)' }}>
+                    {(() => {
+                      const filtered = apiComments.filter(c => inboxSubFilter === 'pending' ? !c.is_processed : c.is_processed);
+                      if (filtered.length === 0) {
+                        return (
+                          <div style={{ padding: '48px 0', textAlign: 'center' }}>
+                            <svg style={{ width: 32, height: 32, color: 'var(--text-muted)', margin: '0 auto 12px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0l-3.586 3.586a2 2 0 01-2.828 0L6 13" />
+                            </svg>
+                            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                              No {inboxSubFilter === 'pending' ? 'pending comments waiting for approval' : 'posted comments history yet'}.
                             </p>
+                          </div>
+                        );
+                      }
 
-                            {/* AI Reply Block */}
-                            {comment.replies && comment.replies.length > 0 && (
-                              <div className="space-y-2 pt-1">
-                                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center justify-between">
-                                  <span>Generated AI Response:</span>
-                                  {comment.replies[0].used_web_search && (
-                                    <span className="text-emerald-400 flex items-center gap-1">🌐 Real-time Web Verified</span>
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--element-gap)' }}>
+                          {filtered.map((comment) => (
+                            <div key={comment.id} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: 16 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>@{comment.commenter_username || 'user'}</span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(comment.created_at).toLocaleString()}</span>
+                                </div>
+                                <span className={`ds-badge ${comment.is_processed ? 'ds-badge-success' : 'ds-badge-warning'}`} style={{ fontSize: 10 }}>
+                                  {comment.is_processed ? 'Posted' : 'Pending Review'}
+                                </span>
+                              </div>
+
+                              <p style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', marginBottom: 10 }}>
+                                "{comment.text}"
+                              </p>
+
+                              {/* AI Reply Block */}
+                              {comment.replies && comment.replies.length > 0 && (
+                                <div style={{ marginBottom: 8 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)' }}>Generated AI Response:</span>
+                                    {comment.replies[0].used_web_search && (
+                                      <span style={{ fontSize: 11, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>🌐 Real-time Web Verified</span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--accent-glow)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                                    {comment.replies[0].reply_text}
+                                  </div>
+
+                                  {!comment.is_processed && (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+                                      <button onClick={() => handleRejectReply(comment.id)} className="ds-btn-ghost-sm">
+                                        Discard
+                                      </button>
+                                      <button onClick={() => handleApproveReply(comment.id)} className="ds-btn-primary-sm" style={{ background: 'var(--success)' }}>
+                                        Post to Instagram ✓
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
-                                <div className="text-xs text-slate-200 bg-purple-950/20 p-3 rounded-lg border border-purple-500/20">
-                                  {comment.replies[0].reply_text}
+                              )}
+
+                              {!comment.replies?.length && !comment.is_processed && (
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                                  <button onClick={() => handleGenerateReply(comment.id)} className="ds-btn-primary-sm">
+                                    ✨ Generate AI Reply
+                                  </button>
                                 </div>
-
-                                {!comment.is_processed && (
-                                  <div className="flex items-center justify-end gap-2 pt-2">
-                                    <button
-                                      onClick={() => handleRejectReply(comment.id)}
-                                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"
-                                    >
-                                      Discard
-                                    </button>
-                                    <button
-                                      onClick={() => handleApproveReply(comment.id)}
-                                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow transition-all"
-                                    >
-                                      Post to Instagram ✓
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {!comment.replies?.length && !comment.is_processed && (
-                              <div className="pt-1 flex justify-end">
-                                <button
-                                  onClick={() => handleGenerateReply(comment.id)}
-                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-all"
-                                >
-                                  ✨ Generate AI Reply
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             ) : (
-              /* AUTOMATION LIST CARDS VIEW */
-              <div className="space-y-6">
-                <div className="border-b border-slate-800/60 pb-3">
-                  <h1 className="text-lg font-black text-white uppercase tracking-wider">My Automations</h1>
-                  <p className="text-xs text-slate-400 mt-0.5">Click any automation to view settings, analytics, and pending approval queue.</p>
+              /* ──── AUTOMATION LIST VIEW ──── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                <div>
+                  <h1 className="ds-page-title">My Automations</h1>
+                  <p className="ds-page-subtitle">Click any automation to view settings, analytics, and pending approval queue.</p>
                 </div>
 
-                {/* AI Reply Automation Card */}
+                {/* AI Reply Automation Card (Active) */}
                 <div
-                  onClick={() => setSelectedAutomation('ai-reply')}
-                  className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-6 cursor-pointer hover:border-purple-500/40 transition-all group shadow-md"
+                  onClick={() => {
+                    if (apiUser && !apiUser.has_advanced_scopes) {
+                      setShowScopePromptModal(true);
+                    } else {
+                      setSelectedAutomation('ai-reply');
+                    }
+                  }}
+                  className="ds-card"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-600/20 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg style={{ width: 20, height: 20, color: 'var(--accent-light)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-white">AI Reply for Engagement</h3>
-                        <p className="text-[11px] text-slate-400">Auto-reply to comments with AI-powered contextual responses</p>
+                        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>AI Reply for Engagement</h3>
+                        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Auto-reply to comments with AI-powered contextual responses</p>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-bold uppercase px-2.5 py-1 rounded-full border ${
-                      apiUser?.auto_reply_enabled
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}>
-                      {apiUser?.auto_reply_enabled ? 'Active' : 'Setup Required'}
+                    <span className={`ds-badge ${apiUser?.auto_reply_enabled ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                      {apiUser?.auto_reply_enabled ? '● Active' : 'Setup Required'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-[11px] text-slate-500">
-                    <span>🧠 Gemini + Groq</span>
-                    <span>🌐 Real-time data</span>
-                    <span>⚡ Auto or Draft mode</span>
+
+                  {/* Feature badges */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>🧠 Gemini + Groq</span>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>🌐 Real-time data</span>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>⚡ Auto or Draft mode</span>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">
+
+                  <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {apiComments.length} Comments • {apiComments.filter(c => !c.is_processed).length} Pending Review
                     </span>
-                    <span className="text-purple-400 font-semibold group-hover:text-purple-300 transition-colors flex items-center gap-1">
-                      <span>View Details & Settings</span>
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <span style={{ fontSize: 13, color: 'var(--accent-light)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      View Details
+                      <svg style={{ width: 14, height: 14 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </span>
@@ -990,62 +955,60 @@ export default function Dashboard({ user, onSignOut }) {
                 </div>
 
                 {/* Coming Soon Cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-[#090D1A] rounded-2xl border border-slate-800/40 p-5 opacity-50">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
-                        <span className="text-sm">💬</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--element-gap)' }}>
+                  {[
+                    { icon: '💬', name: 'Comment-to-DM', desc: 'Auto-send DMs when users comment specific keywords.' },
+                    { icon: '📸', name: 'Story Mention Reply', desc: 'Auto-thank users who mention you in their stories.' },
+                  ].map((item) => (
+                    <div key={item.name} className="ds-card" style={{ opacity: 0.6, position: 'relative' }}>
+                      <span className="ds-badge ds-badge-muted" style={{ position: 'absolute', top: 16, right: 16, fontSize: 10 }}>Coming Soon</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                          {item.icon}
+                        </div>
+                        <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>{item.name}</h3>
                       </div>
-                      <h3 className="text-xs font-bold text-slate-500">Comment-to-DM</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.desc}</p>
                     </div>
-                    <p className="text-[10px] text-slate-600">Auto-send DMs when users comment specific keywords.</p>
-                    <span className="text-[9px] text-slate-600 font-bold uppercase mt-2 inline-block">Coming Soon</span>
-                  </div>
-                  <div className="bg-[#090D1A] rounded-2xl border border-slate-800/40 p-5 opacity-50">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center">
-                        <span className="text-sm">📸</span>
-                      </div>
-                      <h3 className="text-xs font-bold text-slate-500">Story Mention Reply</h3>
-                    </div>
-                    <p className="text-[10px] text-slate-600">Auto-thank users who mention you in their stories.</p>
-                    <span className="text-[9px] text-slate-600 font-bold uppercase mt-2 inline-block">Coming Soon</span>
-                  </div>
+                  ))}
                 </div>
               </div>
             )}
           </motion.div>
         )}
 
-
-
-        {/* TAB 4: SETTINGS & META GRAPH API */}
+        {/* ═══════════════ TAB 3: SETTINGS ═══════════════ */}
         {activeTab === 'settings' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <div className="border-b border-slate-800/60 pb-3">
-              <h1 className="text-lg font-black text-white uppercase tracking-wider">Settings & Meta Credentials</h1>
+          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+            <div>
+              <h1 className="ds-page-title">Settings</h1>
+              <p className="ds-page-subtitle">Manage your Instagram integration and account preferences.</p>
             </div>
 
-            <div className="bg-[#090D1A] rounded-2xl border border-slate-800/80 p-5 space-y-6 shadow-md">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Instagram Business Integration</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Meta Graph API access configuration</p>
+            {/* Instagram Integration Card */}
+            <div className="ds-card">
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Instagram Business Integration</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Meta Graph API access configuration</p>
               </div>
 
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400">Linked Account</span>
-                  <span className="text-xs font-bold text-purple-400">
+              <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
+                {/* Linked Account Row */}
+                <div className="ds-row">
+                  <span className="ds-row-label">Linked Account</span>
+                  <span className="ds-row-value">
                     {apiUser?.username ? `@${apiUser.username}` : 'Not Connected'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-900 pt-3">
-                  <span className="text-xs font-semibold text-slate-400">AI Reply Tone</span>
+                {/* AI Reply Tone Row */}
+                <div className="ds-row">
+                  <span className="ds-row-label">AI Reply Tone</span>
                   <select
                     value={apiUser?.reply_tone || 'friendly'}
                     onChange={(e) => handleUpdateTone(e.target.value)}
-                    className="bg-slate-900 text-xs border border-slate-800 rounded-lg p-2 text-white outline-none focus:border-purple-500/20"
+                    className="ds-select"
+                    style={{ padding: '6px 10px', fontSize: 13 }}
                   >
                     <option value="friendly">Friendly & Casual</option>
                     <option value="professional">Professional</option>
@@ -1054,49 +1017,88 @@ export default function Dashboard({ user, onSignOut }) {
                   </select>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-900 pt-3">
-                  <span className="text-xs font-semibold text-slate-400">Auto-Reply Comments</span>
+                {/* Auto-Reply Toggle Row */}
+                <div className="ds-row">
+                  <span className="ds-row-label">Auto-Reply Comments</span>
                   <button
                     onClick={toggleAutoReplySetting}
-                    className={`w-9 h-5 rounded-full transition-colors p-0.5 flex items-center ${
-                      apiUser?.auto_reply_enabled
-                        ? 'bg-purple-600 justify-end'
-                        : 'bg-slate-800 justify-start'
-                    }`}
+                    className={`ds-toggle ${apiUser?.auto_reply_enabled ? 'ds-toggle-on' : 'ds-toggle-off'}`}
                   >
-                    <span className="w-3.5 h-3.5 rounded-md bg-white shadow-md" />
+                    <span className="ds-toggle-knob" />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-900 pt-3">
-                  <span className="text-xs font-semibold text-slate-400">Connection Handshake</span>
+                {/* Connection Handshake Row */}
+                <div className="ds-row">
+                  <span className="ds-row-label">Connection Handshake</span>
                   {isInstagramConnected ? (
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
-                      Handshake Active
-                    </span>
+                    <span className="ds-badge ds-badge-success">Handshake Active</span>
                   ) : (
-                    <button
-                      onClick={handleConnectInstagram}
-                      className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all"
-                    >
+                    <button onClick={handleConnectInstagram} className="ds-btn-primary-sm">
                       Connect Instagram
                     </button>
                   )}
                 </div>
               </div>
             </div>
+
+            {/* Notification Preferences Card */}
+            <div className="ds-card">
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Notification Preferences</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Configure how you receive alerts</p>
+              </div>
+              <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
+                <div className="ds-row">
+                  <span className="ds-row-label">New comment alerts</span>
+                  <button className="ds-toggle ds-toggle-on">
+                    <span className="ds-toggle-knob" />
+                  </button>
+                </div>
+                <div className="ds-row">
+                  <span className="ds-row-label">AI reply failures</span>
+                  <button className="ds-toggle ds-toggle-on">
+                    <span className="ds-toggle-knob" />
+                  </button>
+                </div>
+                <div className="ds-row">
+                  <span className="ds-row-label">Weekly analytics digest</span>
+                  <button className="ds-toggle ds-toggle-off">
+                    <span className="ds-toggle-knob" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Danger Zone Card */}
+            <div className="ds-danger-card">
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--error)' }}>Danger Zone</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Irreversible actions for your account</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Disconnect Instagram Account</span>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Remove your linked Instagram business account. You can reconnect anytime.</p>
+                </div>
+                <button className="ds-btn-danger">
+                  Disconnect
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
+        </div>
       </main>
 
-      {/* REEL SUMMARY DRAWER MODAL */}
+      {/* ═══════════════ REEL SUMMARY DRAWER MODAL ═══════════════ */}
       <AnimatePresence>
         {selectedReel && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            style={{ position: 'fixed', inset: 0, background: 'rgba(10,10,15,0.85)', backdropFilter: 'blur(12px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
             onClick={() => setSelectedReel(null)}
           >
             <motion.div
@@ -1104,47 +1106,48 @@ export default function Dashboard({ user, onSignOut }) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.96, y: 15 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#090D1A] border border-slate-800/80 rounded-2xl p-6 sm:p-7 max-w-xl w-full text-white space-y-5 shadow-2xl relative"
+              className="ds-card"
+              style={{ maxWidth: 560, width: '100%', position: 'relative', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
               <button
                 onClick={() => setSelectedReel(null)}
-                className="absolute top-5 right-5 text-slate-400 hover:text-white transition-colors"
+                style={{ position: 'absolute', top: 16, right: 16, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10 }}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
 
-              <div className="flex items-center gap-2 text-[10px] font-bold text-purple-400 uppercase tracking-wider">
-                <span>Gemini Analysis Summary</span>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent-light)', marginBottom: 8 }}>
+                Gemini Analysis Summary
               </div>
 
-              <h2 className="text-base font-black text-white">{selectedReel.caption || 'No caption'}</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>{selectedReel.caption || 'No caption'}</h2>
 
-              <div className="space-y-3.5 max-h-[60vh] overflow-y-auto pr-1">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', paddingRight: 4, flex: 1 }}>
                 {selectedReel.summary ? (
                   <>
                     {/* Error block if summary failed */}
                     {selectedReel.summary.analysis_model === 'failed' && (
-                      <div className="bg-red-950/40 border border-red-500/20 p-4 rounded-xl text-xs text-red-200 leading-relaxed">
+                      <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: 16, borderRadius: 'var(--radius-card)', fontSize: 13, color: '#FCA5A5', lineHeight: 1.5 }}>
                         Error: Summary generation failed. Details: {selectedReel.summary.ai_summary?.error || 'Unknown pipeline failure.'}
                       </div>
                     )}
 
                     {selectedReel.summary.analysis_model !== 'failed' && (
                       <>
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
-                          <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Main Topic</div>
-                          <div className="text-xs font-bold text-purple-300 mt-1">
+                        <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Main Topic</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)', marginTop: 6 }}>
                             {selectedReel.summary.ai_summary?.topic || 'Not extracted'}
                           </div>
                         </div>
 
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
-                          <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Key Points</div>
-                          <ul className="list-decimal list-inside text-xs text-slate-300 mt-1.5 space-y-1.5 leading-relaxed">
+                        <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Key Points</div>
+                          <ul style={{ listStyleType: 'decimal', paddingLeft: 20, fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>
                             {selectedReel.summary.key_points && selectedReel.summary.key_points.length > 0 ? (
-                              selectedReel.summary.key_points.map((pt, idx) => <li key={idx}>{pt}</li>)
+                              selectedReel.summary.key_points.map((pt, idx) => <li key={idx} style={{ marginBottom: 6 }}>{pt}</li>)
                             ) : (
                               <li>No key takeaways extracted.</li>
                             )}
@@ -1152,13 +1155,13 @@ export default function Dashboard({ user, onSignOut }) {
                         </div>
 
                         {selectedReel.summary.faq && selectedReel.summary.faq.length > 0 && (
-                          <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-3">
-                            <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Anticipated FAQs</div>
-                            <div className="space-y-3.5">
+                          <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Anticipated FAQs</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                               {selectedReel.summary.faq.map((item, idx) => (
-                                <div key={idx} className="text-xs border-l-2 border-purple-500/20 pl-3 leading-relaxed">
-                                  <p className="font-bold text-purple-200">Question: {item.question || item.q}</p>
-                                  <p className="text-slate-400 mt-1">Answer: {item.answer || item.a}</p>
+                                <div key={idx} style={{ fontSize: 13, borderLeft: '2px solid var(--accent)', paddingLeft: 12, lineHeight: 1.5 }}>
+                                  <p style={{ fontWeight: 600, color: 'var(--accent-light)' }}>Q: {item.question || item.q}</p>
+                                  <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>A: {item.answer || item.a}</p>
                                 </div>
                               ))}
                             </div>
@@ -1166,11 +1169,11 @@ export default function Dashboard({ user, onSignOut }) {
                         )}
 
                         {selectedReel.summary.ai_summary?.realtime_context && (
-                          <div className="bg-slate-950 p-4 rounded-xl border border-slate-900">
-                            <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1.5">
+                          <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
                               <IconGlobe /> Real-time search context
                             </div>
-                            <p className="text-xs text-slate-300 mt-1.5 leading-relaxed whitespace-pre-wrap">
+                            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                               {selectedReel.summary.ai_summary.realtime_context}
                             </p>
                           </div>
@@ -1179,7 +1182,7 @@ export default function Dashboard({ user, onSignOut }) {
                     )}
                   </>
                 ) : (
-                  <div className="text-xs text-slate-500 text-center py-6">
+                  <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
                     Reel analysis pending. Click Analyze Reel to generate.
                   </div>
                 )}
@@ -1196,7 +1199,7 @@ export default function Dashboard({ user, onSignOut }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60]"
+            style={{ position: 'fixed', inset: 0, zIndex: 60 }}
           >
             <AutomationSetup
               apiUser={apiUser}
@@ -1206,6 +1209,73 @@ export default function Dashboard({ user, onSignOut }) {
               }}
               onConnect={handleConnectInstagram}
             />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ADVANCED SCOPE PROMPT MODAL */}
+      <AnimatePresence>
+        {showScopePromptModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(10,10,15,0.85)',
+              backdropFilter: 'blur(12px)',
+              zIndex: 70,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16
+            }}
+            onClick={() => setShowScopePromptModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="ds-card"
+              style={{
+                maxWidth: 460,
+                width: '100%',
+                textAlign: 'center',
+                padding: '32px 24px',
+                border: '1px solid rgba(124,58,237,0.3)',
+                background: 'var(--bg-card)'
+              }}
+            >
+              <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+                Advanced Permissions Required
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 28 }}>
+                AI auto-replies require comment management permissions to draft and publish replies under your posts. Reconnect your Instagram account via Meta to grant these permissions.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  onClick={() => {
+                    setShowScopePromptModal(false);
+                    handleConnectAdvancedInstagram();
+                  }}
+                  className="ds-btn-primary"
+                  style={{ width: '100%', justifyContent: 'center', gap: 8 }}
+                >
+                  Authorize Comment Management
+                </button>
+                <button
+                  onClick={() => setShowScopePromptModal(false)}
+                  className="ds-btn-ghost"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
