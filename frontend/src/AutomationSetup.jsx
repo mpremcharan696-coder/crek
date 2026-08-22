@@ -120,7 +120,7 @@ function StepSidebar({ currentStep, completedSteps }) {
 /* ════════════════════════════════════════════
    STEP 1: CONNECT
    ════════════════════════════════════════════ */
-function StepConnect({ onConnect, isConnected }) {
+function StepConnect({ onConnect, onConnectAdvanced, isConnected, hasAdvancedScopes }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ maxWidth: 520, width: '100%' }}>
@@ -148,12 +148,27 @@ function StepConnect({ onConnect, isConnected }) {
         </div>
 
         {isConnected ? (
-          <div className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: 12, borderColor: 'rgba(16,185,129,0.2)', background: 'rgba(16,185,129,0.06)' }}>
-            <svg style={{ width: 20, height: 20, color: 'var(--success)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)' }}>Instagram connected successfully!</span>
-          </div>
+          hasAdvancedScopes ? (
+            <div className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: 12, borderColor: 'rgba(16,185,129,0.2)', background: 'rgba(16,185,129,0.06)' }}>
+              <svg style={{ width: 20, height: 20, color: 'var(--success)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)' }}>Instagram connected with advanced permissions!</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: 12, borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
+                <span style={{ fontSize: 18 }}>⚠️</span>
+                <span style={{ fontSize: 13, color: 'var(--warning)', fontWeight: 600 }}>Advanced comment permissions are required to automate replies.</span>
+              </div>
+              <button onClick={onConnectAdvanced} className="ds-btn-primary" style={{ gap: 12, width: '100%', justifyContent: 'center' }}>
+                <svg style={{ width: 20, height: 20 }} fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+                </svg>
+                Authorize Advanced Permissions
+              </button>
+            </div>
+          )
         ) : (
           <button onClick={onConnect} className="ds-btn-primary" style={{ gap: 12 }}>
             <svg style={{ width: 20, height: 20 }} fill="currentColor" viewBox="0 0 24 24">
@@ -970,11 +985,12 @@ function StepGoLive({ voiceProfile, apiUser, onFinish }) {
 /* ════════════════════════════════════════════
    MAIN WIZARD EXPORT
    ════════════════════════════════════════════ */
-export default function AutomationSetup({ apiUser, onComplete, onConnect }) {
+export default function AutomationSetup({ apiUser, onComplete, onConnect, onConnectAdvanced }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState([]);
 
   const isConnected = Boolean(apiUser?.instagram_user_id);
+  const hasAdvancedScopes = Boolean(apiUser?.has_advanced_scopes);
 
   const [voiceProfile, setVoiceProfile] = useState({
     business_name: apiUser?.full_name || apiUser?.username || '',
@@ -1001,11 +1017,11 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect }) {
         ...prev,
         business_name: apiUser.full_name || apiUser.username || prev.business_name,
       }));
-      if (isConnected && currentStep === 1) {
+      if (isConnected && hasAdvancedScopes && currentStep === 1) {
         completeStep(1);
       }
     }
-  }, [apiUser]);
+  }, [apiUser, isConnected, hasAdvancedScopes]);
 
   const completeStep = (stepId, generatedData = null) => {
     if (generatedData) {
@@ -1056,8 +1072,13 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect }) {
         <AnimatePresence mode="wait">
           {currentStep === 1 && (
             <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <StepConnect onConnect={onConnect} isConnected={isConnected} />
-              {isConnected && (
+              <StepConnect 
+                onConnect={onConnect} 
+                onConnectAdvanced={onConnectAdvanced} 
+                isConnected={isConnected} 
+                hasAdvancedScopes={hasAdvancedScopes} 
+              />
+              {isConnected && hasAdvancedScopes && (
                 <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
                   <button onClick={() => completeStep(1)} className="ds-btn-primary">
                     Continue →

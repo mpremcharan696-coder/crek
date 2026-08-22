@@ -910,6 +910,8 @@ export default function Dashboard({ user, onSignOut }) {
                   onClick={() => {
                     if (apiUser && !apiUser.has_advanced_scopes) {
                       setShowScopePromptModal(true);
+                    } else if (apiUser && !apiUser.reply_style) {
+                      setShowSetupWizard(true);
                     } else {
                       setSelectedAutomation('ai-reply');
                     }
@@ -1208,6 +1210,7 @@ export default function Dashboard({ user, onSignOut }) {
                 loadDashboardData();
               }}
               onConnect={handleConnectInstagram}
+              onConnectAdvanced={handleConnectAdvancedInstagram}
             />
           </motion.div>
         )}
