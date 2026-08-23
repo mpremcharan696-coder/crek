@@ -8,12 +8,12 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
    STEP SIDEBAR (DARK THEME)
    ════════════════════════════════════════════ */
 const STEPS = [
-  { id: 1, label: 'Connect', desc: 'Link your Instagram account' },
-  { id: 2, label: 'Scan', desc: 'We read your profile and posts' },
-  { id: 3, label: 'Voice', desc: 'Confirm tone and knowledge' },
-  { id: 4, label: 'Preview', desc: 'Review draft replies' },
-  { id: 5, label: 'Automations', desc: 'Choose what runs on its own' },
-  { id: 6, label: 'Go live', desc: 'Turn on your first replies' },
+  { id: 1, label: 'Channel Link', desc: 'Securely authenticate Instagram' },
+  { id: 2, label: 'Content Digest', desc: 'AI scan of recent feed' },
+  { id: 3, label: 'Persona DNA', desc: 'Refine brand voice & tone' },
+  { id: 4, label: 'Simulator', desc: 'Test replies in live sandbox' },
+  { id: 5, label: 'Autopilot', desc: 'Configure execution rules' },
+  { id: 6, label: 'Activation', desc: 'Launch your AI agent' },
 ];
 
 const INDUSTRIES = [
@@ -299,29 +299,29 @@ function StepScan({ onComplete, apiUser }) {
    STEP 3: VOICE PROFILE
    ════════════════════════════════════════════ */
 function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
-  const [activeSubTab, setActiveSubTab] = useState('identity');
+  const [activeSubTab, setActiveSubTab] = useState('brand dna');
   const [confirmed, setConfirmed] = useState(false);
-  const subTabs = ['Identity', 'Knowledge', 'Voice', 'Safety', 'Confirm'];
+  const subTabs = ['Brand DNA', 'Knowledge Bank', 'Tone Profile', 'Guardrails', 'Review DNA'];
 
   const update = (key, value) => setVoiceProfile((prev) => ({ ...prev, [key]: value }));
 
   return (
     <div style={{ flex: 1 }}>
-      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: 4 }}>Voice Profile</div>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: 4 }}>Voice DNA Profile</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-          {activeSubTab === 'identity' && 'Identity'}
-          {activeSubTab === 'knowledge' && 'Knowledge'}
-          {activeSubTab === 'voice' && 'Voice'}
-          {activeSubTab === 'safety' && 'Safety'}
-          {activeSubTab === 'confirm' && 'Confirm'}
+          {activeSubTab === 'brand dna' && 'Brand DNA'}
+          {activeSubTab === 'knowledge bank' && 'Knowledge Bank'}
+          {activeSubTab === 'tone profile' && 'Tone Profile'}
+          {activeSubTab === 'guardrails' && 'Guardrails'}
+          {activeSubTab === 'review dna' && 'Review DNA'}
         </h2>
         <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 4 }}>
-          {activeSubTab === 'identity' && 'Who you are'}
-          {activeSubTab === 'knowledge' && 'What we should know'}
-          {activeSubTab === 'voice' && 'How you sound'}
-          {activeSubTab === 'safety' && 'What to avoid'}
-          {activeSubTab === 'confirm' && 'Final review'}
+          {activeSubTab === 'brand dna' && 'Core Identity'}
+          {activeSubTab === 'knowledge bank' && 'Factsheet & FAQ'}
+          {activeSubTab === 'tone profile' && 'Speech & Persona'}
+          {activeSubTab === 'guardrails' && 'Response Safety'}
+          {activeSubTab === 'review dna' && 'Profile Review'}
         </span>
       </div>
 
@@ -344,7 +344,7 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
       </div>
 
       {/* Identity Tab */}
-      {activeSubTab === 'identity' && (
+      {activeSubTab === 'brand dna' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div className="ds-card" style={{ borderColor: 'rgba(16,185,129,0.15)', background: 'rgba(16,185,129,0.04)', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
             <span>✨</span>
@@ -382,14 +382,14 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
               style={{ resize: 'none' }}
             />
           </div>
-          <button onClick={() => setActiveSubTab('knowledge')} className="ds-btn-primary" style={{ alignSelf: 'flex-start' }}>
-            Next → Knowledge
+          <button onClick={() => setActiveSubTab('knowledge bank')} className="ds-btn-primary" style={{ alignSelf: 'flex-start' }}>
+            Next → Knowledge Bank
           </button>
         </motion.div>
       )}
 
       {/* Knowledge Tab */}
-      {activeSubTab === 'knowledge' && (
+      {activeSubTab === 'knowledge bank' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             Everything your AI should know before replying — products, pricing, hours, policies, FAQs, differentiators.
@@ -403,14 +403,13 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
             style={{ resize: 'none', fontFamily: 'monospace' }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
-            <button onClick={() => setActiveSubTab('identity')} className="ds-btn-ghost">← Back</button>
-            <button onClick={() => setActiveSubTab('voice')} className="ds-btn-primary">Next → Voice</button>
+            <button onClick={() => setActiveSubTab('brand dna')} className="ds-btn-ghost">← Back</button>
+            <button onClick={() => setActiveSubTab('tone profile')} className="ds-btn-primary">Next → Tone Profile</button>
           </div>
         </motion.div>
       )}
 
-      {/* Voice Tab */}
-      {activeSubTab === 'voice' && (
+      {activeSubTab === 'tone profile' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Select Voice Mode</label>
@@ -510,14 +509,14 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
-            <button onClick={() => setActiveSubTab('knowledge')} className="ds-btn-ghost">← Back</button>
-            <button onClick={() => setActiveSubTab('safety')} className="ds-btn-primary">Next → Safety</button>
+            <button onClick={() => setActiveSubTab('knowledge bank')} className="ds-btn-ghost">← Back</button>
+            <button onClick={() => setActiveSubTab('guardrails')} className="ds-btn-primary">Next → Guardrails</button>
           </div>
         </motion.div>
       )}
 
-      {/* Safety Tab */}
-      {activeSubTab === 'safety' && (
+      {/* Guardrails Tab */}
+      {activeSubTab === 'guardrails' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div>
@@ -561,21 +560,21 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Default mode is manual review / drafts only. You can enable full automation later from settings.</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
-            <button onClick={() => setActiveSubTab('voice')} className="ds-btn-ghost">← Back</button>
-            <button onClick={() => setActiveSubTab('confirm')} className="ds-btn-primary">Next → Confirm</button>
+            <button onClick={() => setActiveSubTab('tone profile')} className="ds-btn-ghost">← Back</button>
+            <button onClick={() => setActiveSubTab('review dna')} className="ds-btn-primary">Next → Review DNA</button>
           </div>
         </motion.div>
       )}
 
-      {/* Confirm Tab */}
-      {activeSubTab === 'confirm' && (
+      {/* Review DNA Tab */}
+      {activeSubTab === 'review dna' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {[
-              { label: 'Account', value: voiceProfile.business_name || 'Not set' },
-              { label: 'Category', value: voiceProfile.industry || 'Not set' },
-              { label: 'Audience', value: voiceProfile.audience || 'Not set' },
-              { label: 'Voice Mode', value: `${VOICE_MODES.find((m) => m.id === (voiceProfile.mode || 'casual_friend'))?.icon || ''} ${VOICE_MODES.find((m) => m.id === (voiceProfile.mode || 'casual_friend'))?.label || ''}` },
+              { label: 'Account Name', value: voiceProfile.business_name || 'Not set' },
+              { label: 'DNA Category', value: voiceProfile.industry || 'Not set' },
+              { label: 'Audience Group', value: voiceProfile.audience || 'Not set' },
+              { label: 'Speech Mode', value: `${VOICE_MODES.find((m) => m.id === (voiceProfile.mode || 'casual_friend'))?.icon || ''} ${VOICE_MODES.find((m) => m.id === (voiceProfile.mode || 'casual_friend'))?.label || ''}` },
             ].map((item) => (
               <div key={item.label} className="ds-card">
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>{item.label}</div>
@@ -584,10 +583,10 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
             ))}
           </div>
           <div className="ds-card">
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>Knowledge</div>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>Knowledge Bank</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{(voiceProfile.knowledge || 'Not set').slice(0, 200)}{voiceProfile.knowledge?.length > 200 ? '...' : ''}</div>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Confirm the profile in the banner below to enable Save.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Confirm the brand profile in the checkbox below to continue.</p>
 
           <div
             onClick={() => setConfirmed(!confirmed)}
@@ -610,11 +609,11 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
                 </svg>
               )}
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>I reviewed this profile. Pilotly can use it to draft replies.</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>I have verified this brand DNA. Pilotly can use it to generate replies.</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
-            <button onClick={() => setActiveSubTab('safety')} className="ds-btn-ghost">← Back</button>
+            <button onClick={() => setActiveSubTab('guardrails')} className="ds-btn-ghost">← Back</button>
             <button
               onClick={onComplete}
               disabled={!confirmed}
@@ -637,6 +636,8 @@ function StepPreview({ voiceProfile, onComplete }) {
   const activeMode = voiceProfile.mode || 'casual_friend';
   const activeModeObj = VOICE_MODES.find((m) => m.id === activeMode) || VOICE_MODES[5];
   
+  const chatContainerRef = React.useRef(null);
+  
   const [chatMessages, setChatMessages] = useState([
     {
       id: 1,
@@ -653,6 +654,15 @@ function StepPreview({ voiceProfile, onComplete }) {
   const [inputComment, setInputComment] = useState('');
   const [sending, setSending] = useState(false);
   const [approved, setApproved] = useState(false);
+
+  React.useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [chatMessages, sending]);
 
   const handleSendTestMessage = async (customText = null) => {
     const textToSubmit = customText || inputComment;
@@ -716,7 +726,7 @@ function StepPreview({ voiceProfile, onComplete }) {
       {/* Sandbox Chat Window */}
       <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border)', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 320 }}>
         {/* Messages Feed */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', maxHeight: 220, paddingRight: 8 }}>
+        <div ref={chatContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', maxHeight: 220, paddingRight: 8 }}>
           {chatMessages.map((msg) => (
             <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
               <div style={{
