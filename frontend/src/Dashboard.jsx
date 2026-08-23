@@ -80,6 +80,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   // Inline Draft Editing state (Stores drafts modified by user)
   const [editedReplies, setEditedReplies] = useState({});
+  const [analyzingReels, setAnalyzingReels] = useState({});
 
   // Load Real Data from Backend
   const loadDashboardData = async () => {
@@ -128,11 +129,10 @@ export default function Dashboard({ user, onSignOut }) {
     setSyncing(true);
     try {
       await triggerReelSync();
-      showNotification('Success: Reel sync request dispatched');
-      setTimeout(async () => {
-        const updated = await fetchReels();
-        setApiReels(updated);
-      }, 1500);
+      showNotification('Success: Reels synced successfully');
+      const updated = await fetchReels();
+      setApiReels(updated);
+      await loadDashboardData();
     } catch (err) {
       showNotification(`Error: ${err.message || 'Sync request failed'}`);
     } finally {
@@ -155,12 +155,17 @@ export default function Dashboard({ user, onSignOut }) {
   // Trigger Reel Analysis (Gemini 2.5 Flash + Grok)
   const handleAnalyzeReel = async (e, reelId) => {
     e.stopPropagation();
+    if (analyzingReels[reelId]) return;
+
+    setAnalyzingReels((prev) => ({ ...prev, [reelId]: true }));
     try {
       await analyzeReel(reelId);
-      showNotification('Success: AI analysis enqueued');
-      setTimeout(loadDashboardData, 1000);
+      showNotification('Success: AI analysis completed');
+      await loadDashboardData();
     } catch (err) {
       showNotification(`Error: ${err.message || 'Analysis request failed'}`);
+    } finally {
+      setAnalyzingReels((prev) => ({ ...prev, [reelId]: false }));
     }
   };
 
@@ -593,10 +598,11 @@ export default function Dashboard({ user, onSignOut }) {
                         </button>
                         <button
                           onClick={(e) => handleAnalyzeReel(e, reel.id)}
+                          disabled={analyzingReels[reel.id]}
                           className="ds-btn-primary-sm"
-                          style={{ flex: 1 }}
+                          style={{ flex: 1, opacity: analyzingReels[reel.id] ? 0.7 : 1 }}
                         >
-                          Analyze
+                          {analyzingReels[reel.id] ? 'Analyzing…' : 'Analyze'}
                         </button>
                       </div>
                     </div>
