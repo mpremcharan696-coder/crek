@@ -98,7 +98,12 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
                 media_id,
             )
             # Enqueue reel analysis; it will fetch from Meta and create the record
-            await ctx["redis"].enqueue_job("analyze_reel_task", media_id=media_id)
+            if ctx.get("redis"):
+                await ctx["redis"].enqueue_job("analyze_reel_task", media_id=media_id)
+            else:
+                import asyncio
+                from app.workers.reel_tasks import analyze_reel_task
+                asyncio.create_task(analyze_reel_task(ctx, media_id=media_id))
             # Retry this comment with backoff
             await session.commit()
             delay = _RETRY_DELAYS[min(ctx["job_try"] - 1, len(_RETRY_DELAYS) - 1)]
@@ -121,7 +126,12 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
                 "No summary found for reel %d, queuing analysis and delaying comment processing",
                 reel.id,
             )
-            await ctx["redis"].enqueue_job("analyze_reel_task", media_id=reel.media_id)
+            if ctx.get("redis"):
+                await ctx["redis"].enqueue_job("analyze_reel_task", media_id=reel.media_id)
+            else:
+                import asyncio
+                from app.workers.reel_tasks import analyze_reel_task
+                asyncio.create_task(analyze_reel_task(ctx, media_id=reel.media_id))
             await session.commit()
             delay = _RETRY_DELAYS[min(ctx["job_try"] - 1, len(_RETRY_DELAYS) - 1)]
             raise Retry(defer=delay)

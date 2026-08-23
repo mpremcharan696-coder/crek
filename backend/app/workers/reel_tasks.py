@@ -122,8 +122,13 @@ async def sync_user_reels_task(ctx: dict, user_id: int, limit: int | None = None
                 existing = result.scalar_one_or_none()
                 if existing is not None:
                     if not existing.is_analyzed:
-                        await ctx["redis"].enqueue_job("analyze_reel_task", media_id=existing.media_id)
-                        logger.info("Enqueued analysis for existing unanalyzed reel %d", existing.id)
+                        if ctx.get("redis"):
+                            await ctx["redis"].enqueue_job("analyze_reel_task", media_id=existing.media_id)
+                            logger.info("Enqueued analysis for existing unanalyzed reel %d", existing.id)
+                        else:
+                            import asyncio
+                            asyncio.create_task(analyze_reel_task(ctx, media_id=existing.media_id))
+                            logger.info("Spawned direct analysis task for existing unanalyzed reel %d", existing.id)
                     continue
 
                 from datetime import datetime
@@ -153,8 +158,13 @@ async def sync_user_reels_task(ctx: dict, user_id: int, limit: int | None = None
                 new_reel_count += 1
 
                 if not reel.is_analyzed:
-                    await ctx["redis"].enqueue_job("analyze_reel_task", reel_id=reel.id)
-                    logger.info("Enqueued analysis for reel %d (media_id=%s)", reel.id, media_id)
+                    if ctx.get("redis"):
+                        await ctx["redis"].enqueue_job("analyze_reel_task", reel_id=reel.id)
+                        logger.info("Enqueued analysis for reel %d (media_id=%s)", reel.id, media_id)
+                    else:
+                        import asyncio
+                        asyncio.create_task(analyze_reel_task(ctx, reel_id=reel.id))
+                        logger.info("Spawned direct analysis task for reel %d (media_id=%s)", reel.id, media_id)
 
             await session.commit()
 
