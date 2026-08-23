@@ -256,19 +256,65 @@ class CommentService:
         if user is None:
             raise CommentServiceError(f"User {user_id} not found")
 
+        # Check Tier 1
+        from app.workers.comment_tasks import is_emoji_only, is_mention_only
+        if is_emoji_only(comment.text) or is_mention_only(comment.text):
+            reply = CommentReply(
+                comment_id=comment_id,
+                reply_text="[Emoji/mention only comment — marked to like instead of text reply]",
+                status="pending",
+                used_web_search=False,
+                ai_model="static",
+            )
+            self.session.add(reply)
+            await self.session.flush()
+            await self.session.refresh(reply)
+            await self.session.commit()
+            return reply
+
+        # Check Tier 2
         ai_agent = AIAgentService()
-        ai_result = await ai_agent.generate_reply(
-            comment=comment.text,
-            reel_summary=reel.summary.ai_summary,
-            creator_style=user.reply_style,
-            creator_name=user.full_name or user.username,
-        )
+        classification = "CONVERSATIONAL_QUESTION"
+        try:
+            classification = await ai_agent.classify_comment(comment.text)
+        except Exception as e:
+            logger.warning("Failed to classify comment in manual reply: %s", e)
+
+        if classification in ("SPAM", "OTHER"):
+            reply = CommentReply(
+                comment_id=comment_id,
+                reply_text=f"[Comment classified as {classification} — skipping reply]",
+                status="pending",
+                used_web_search=False,
+                ai_model="static",
+            )
+            self.session.add(reply)
+            await self.session.flush()
+            await self.session.refresh(reply)
+            await self.session.commit()
+            return reply
+
+        reply_text = ""
+        used_web_search = False
+        if classification == "SUPPORT":
+            reply_text = "Hey! Send us a DM so we can assist you with your account details securely."
+        else:
+            force_roast = (classification == "TROLL")
+            ai_result = await ai_agent.generate_reply(
+                comment=comment.text,
+                reel_summary=reel.summary.ai_summary,
+                creator_style=user.reply_style,
+                creator_name=user.full_name or user.username,
+                force_roast=force_roast,
+            )
+            reply_text = ai_result["reply_text"]
+            used_web_search = ai_result["used_web_search"]
 
         reply = CommentReply(
             comment_id=comment_id,
-            reply_text=ai_result["reply_text"],
+            reply_text=reply_text,
             status="pending",
-            used_web_search=ai_result["used_web_search"],
+            used_web_search=used_web_search,
             ai_model="qwen/qwen3.6-27b",
         )
         self.session.add(reply)

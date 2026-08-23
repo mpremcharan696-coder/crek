@@ -433,6 +433,37 @@ class AIAgentService:
     # Reply Generation (Groq + optional Grok real-time context)
     # ------------------------------------------------------------------
 
+    async def classify_comment(self, comment: str) -> str:
+        """Classify an Instagram comment into one of: CONVERSATIONAL_QUESTION, SPAM, SUPPORT, TROLL, OTHER.
+
+        Output ONLY the category name.
+        """
+        system_prompt = (
+            "You are a comment classifier for Instagram. Classify the comment into EXACTLY one of these categories:\n"
+            "[CONVERSATIONAL_QUESTION, SPAM, SUPPORT, TROLL, OTHER].\n"
+            "Guidelines:\n"
+            "- CONVERSATIONAL_QUESTION: The user asks a question, gives feedback, shares an opinion, or writes a statement we should engage with.\n"
+            "- SPAM: Bots, promos, crypto shills, links.\n"
+            "- SUPPORT: Order issues, refund requests, complaints, private data.\n"
+            "- TROLL: Insults, hate speech, offensive comments, trash-talk.\n"
+            "- OTHER: Anything else.\n"
+            "Output ONLY the category name."
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Comment: \"{comment}\""}
+        ]
+        try:
+            raw_res = await self._call_groq(messages)
+            category = raw_res.strip().upper()
+            for cat in ["CONVERSATIONAL_QUESTION", "SPAM", "SUPPORT", "TROLL", "OTHER"]:
+                if cat in category:
+                    return cat
+            return "OTHER"
+        except Exception as e:
+            logger.warning("Comment classification failed, falling back to CONVERSATIONAL_QUESTION: %s", e)
+            return "CONVERSATIONAL_QUESTION"
+
     async def generate_reply(
         self,
         comment: str,
@@ -440,10 +471,14 @@ class AIAgentService:
         creator_style: str | None,
         creator_name: str,
         conversation_history: list[dict[str, Any]] | None = None,
+        force_roast: bool = False,
     ) -> dict[str, Any]:
         """Generate an intelligent reply. Groq decides if real-time data is needed."""
         try:
-            style = creator_style or "friendly, helpful, and conversational"
+            if force_roast:
+                style = "roast"
+            else:
+                style = creator_style or "friendly, helpful, and conversational"
             
             try:
                 style_json = json.loads(style)

@@ -25,6 +25,21 @@ from app.models.comment import Comment, CommentReply
 
 logger = logging.getLogger(__name__)
 
+import re
+
+def is_emoji_only(text: str) -> bool:
+    cleaned = re.sub(r"\s+", "", text)
+    if not cleaned:
+        return False
+    return not any(c.isalnum() for c in cleaned)
+
+def is_mention_only(text: str) -> bool:
+    cleaned = re.sub(r"\s+", "", text)
+    if not cleaned:
+        return False
+    words = text.split()
+    return all(w.startswith("@") for w in words)
+
 # Exponential backoff delays (seconds) for when a reel summary isn't ready
 _RETRY_DELAYS = [60, 120, 300]  # 1 min → 2 min → 5 min
 _MAX_RETRIES = 3
@@ -198,31 +213,84 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
 
 
         # ------------------------------------------------------------ #
-        #  5. Generate AI reply
+        #  4c. Check Tier 1: Emojis & Mentions Liking (Zero-Cost)
+        # ------------------------------------------------------------ #
+        if is_emoji_only(comment_text) or is_mention_only(comment_text):
+            logger.info("Comment %s is emoji/mention only. Auto-liking on Instagram...", comment_id)
+            meta_api = MetaAPIService()
+            try:
+                result = await session.execute(
+                    select(UserToken)
+                    .where(UserToken.user_id == creator.id)
+                    .order_by(UserToken.expires_at.desc())
+                    .limit(1)
+                )
+                token_row = result.scalar_one_or_none()
+                if token_row:
+                    access_token = decrypt_token(
+                        token_row.encrypted_access_token,
+                        settings.ENCRYPTION_KEY,
+                    )
+                    await meta_api.like_comment(comment_id, access_token)
+            except Exception as e:
+                logger.error("Failed to like comment %s: %s", comment_id, e)
+            finally:
+                await meta_api.close()
+
+            await session.execute(
+                update(Comment).where(Comment.id == db_comment.id).values(is_processed=True)
+            )
+            await session.commit()
+            return
+
+        # ------------------------------------------------------------ #
+        #  5. Generate AI reply or route via Tier 2 Gatekeeper Classifier
         # ------------------------------------------------------------ #
         ai_service = AIAgentService()
+
+        classification = "CONVERSATIONAL_QUESTION"
+        try:
+            classification = await ai_service.classify_comment(comment_text)
+            logger.info("Comment %s classified as %s", comment_id, classification)
+        except Exception as e:
+            logger.warning("Failed to classify comment %s: %s", comment_id, e)
+
+        # Route based on classification
+        if classification in ("SPAM", "OTHER"):
+            logger.info("Comment %s is %s. Skipping...", comment_id, classification)
+            await session.execute(
+                update(Comment).where(Comment.id == db_comment.id).values(is_processed=True)
+            )
+            await session.commit()
+            return
 
         reply_text = ""
         used_web_search = False
         reply_status = "pending"
         generation_failed = False
 
-        try:
-            reply_result = await ai_service.generate_reply(
-                comment=comment_text,
-                reel_summary=summary.ai_summary,
-                creator_style=creator.reply_style or creator.reply_tone,
-                creator_name=creator.username,
-            )
-            reply_text = reply_result.get("reply_text", "")
-            used_web_search = reply_result.get("used_web_search", False)
-            if not reply_text:
-                reply_text = "reply gneration completed"
-        except Exception as exc:
-            logger.exception("AI reply generation failed for comment_id=%s", comment_id)
-            generation_failed = True
-            reply_text = f"Error: AI Reply Generation Failed: {str(exc)}"
-            reply_status = "failed"
+        if classification == "SUPPORT":
+            reply_text = "Hey! Send us a DM so we can assist you with your account details securely."
+        else:
+            try:
+                # Force roast if Troll comment
+                force_roast = (classification == "TROLL")
+                reply_result = await ai_service.generate_reply(
+                    comment=comment_text,
+                    reel_summary=summary.ai_summary,
+                    creator_style=creator.reply_style or creator.reply_tone,
+                    creator_name=creator.username,
+                    force_roast=force_roast,
+                )
+                reply_text = reply_result.get("reply_text", "")
+                used_web_search = reply_result.get("used_web_search", False)
+                if not reply_text:
+                    reply_text = "reply gneration completed"
+            except Exception as exc:
+                logger.exception("AI reply generation failed for comment_id=%s", comment_id)
+                generation_failed = True
+                reply_text = f"Error: AI Reply Generation Failed: {str(exc)}"
+                reply_status = "failed"
 
         # Determine status based on auto-reply setting if generation succeeded
         if not generation_failed:

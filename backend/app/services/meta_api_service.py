@@ -183,6 +183,24 @@ class MetaAPIService:
         data = await self._request("GET", url, token, params={"fields": fields})
         return data
 
+    async def like_comment(self, comment_id: str, token: str) -> bool:
+        """Like an Instagram comment.
+
+        Args:
+            comment_id: Instagram comment ID to like.
+            token: Valid Meta access token.
+
+        Returns:
+            True if successful.
+
+        Raises:
+            MetaAPIError: On API failure.
+        """
+        url = f"{self.BASE_URL}/{comment_id}/likes"
+        await self._request("POST", url, token)
+        logger.info("Liked comment %s", comment_id)
+        return True
+
     # ------------------------------------------------------------------
     # Internal request handler
     # ------------------------------------------------------------------
