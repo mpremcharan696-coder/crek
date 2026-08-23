@@ -48,9 +48,9 @@ DECISION WORKFLOW:
 3. If you receive real-time data from a search, synthesize it into a natural reply.
 
 RULES:
-- Keep replies concise, natural, and matching the creator's tone.
-- NEVER output robotic disclaimers such as "I don't have that info from the video" or "The video doesn't state that".
-- If a question is about general tech, finance, or general knowledge, use your intelligence to give a helpful, concise answer as the creator.
+- Keep replies very short, concise, and natural (1 to 2 sentences max).
+- NEVER output robotic disclaimers such as "I don't have that info from the video" or "The video doesn't mention that".
+- NEVER output your reasoning or thinking process. Do not write thoughts inside `<think>` or explain your decision. Output ONLY the final response.
 - DO NOT use any emojis under any circumstances.
 - If a user directly asks whether you are an AI or a bot, confirm honestly. Never claim to be human.
 - Never share personal information about the creator beyond what's in the reel."""
@@ -62,8 +62,10 @@ VOICE_MODE_PROMPTS = {
     "sarcastic": "Adopt a sarcastic persona with dry deadpan humor, cheeky irony, and witty retorts. Stay clever and funny.",
     "helpful_expert": "Adopt an authoritative, knowledgeable expert persona. Give clear, educational, confident answers that showcase domain mastery.",
     "casual_friend": "Adopt a warm, casual friend persona. Use friendly, conversational language like chatting with a close buddy.",
+    "friendly": "Adopt a warm, casual friend persona. Use friendly, conversational language like chatting with a close buddy.",
     "professional": "Adopt a polished, articulate, professional business persona. Be polite, clear, and customer-service ready.",
-    "hype_friend": "Adopt an energetic hype-friend persona. Be super supportive, enthusiastic, exciting, and encouraging."
+    "hype_friend": "Adopt an energetic hype-friend persona. Be super supportive, enthusiastic, exciting, and encouraging.",
+    "hype": "Adopt an energetic hype-friend persona. Be super supportive, enthusiastic, exciting, and encouraging."
 }
 
 
@@ -473,13 +475,14 @@ DECISION WORKFLOW:
 RULES:
 - Keep replies very short, concise, and natural (1 to 2 sentences max).
 - NEVER output robotic disclaimers such as "I don't have that info from the video" or "The video doesn't mention that".
+- NEVER output your reasoning or thinking process. Do not write thoughts inside `<think>` or explain your decision. Output ONLY the final response.
 - If a question is about general tech, GPUs, finance, or general knowledge, use your intelligence to give a helpful, concise answer as the creator.
 - DO NOT use any emojis under any circumstances.
 - If a user directly asks whether you are an AI or a bot, confirm honestly. Never claim to be human.
 - Never share personal information about the creator beyond what's in the reel.
 """
 
-                mode = style_json.get("mode") or style_json.get("tone_mode") or ""
+                mode = style_json.get("mode") or style_json.get("tone_mode") or style_json.get("persona") or ""
                 mode_instruction = VOICE_MODE_PROMPTS.get(mode.lower().strip(), "")
                 if mode_instruction:
                     system_prompt += f"\nVOICE MODE INSTRUCTION ({mode.upper()}): {mode_instruction}\n"
@@ -494,9 +497,16 @@ RULES:
                 if dm_t:
                     system_prompt += f"- For these topics, suggest sending a DM instead of answering fully: {', '.join(dm_t)}\n"
             except json.JSONDecodeError:
+                mode = style.lower().strip()
+                if mode == "friendly":
+                    mode = "casual_friend"
+                elif mode == "hype":
+                    mode = "hype_friend"
+                
+                mode_prompt = VOICE_MODE_PROMPTS.get(mode, style)
                 system_prompt = _REPLY_SYSTEM_PROMPT.format(
                     creator_name=creator_name,
-                    creator_style=style,
+                    creator_style=mode_prompt,
                 )
 
             reel_context_str = json.dumps(reel_summary, indent=2, ensure_ascii=False)
