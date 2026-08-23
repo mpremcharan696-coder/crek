@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db
+from app.core.config import settings
 from app.schemas.reel import ReelResponse, ReelDetailResponse
 from app.schemas.comment import CommentResponse
 from app.services.reel_service import ReelService
@@ -124,17 +125,16 @@ async def sync_reel_comments(
 
     try:
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        if arq_pool:
+        if arq_pool and not settings.DISABLE_BG_WORKERS:
             await arq_pool.enqueue_job(
                 "sync_reel_comments_task",
                 reel_id=reel_id,
             )
         else:
-            import asyncio
             from app.workers.comment_tasks import sync_reel_comments_task
             from app.db.session import AsyncSessionLocal
             ctx = {"db_session_factory": AsyncSessionLocal, "redis": None}
-            asyncio.create_task(sync_reel_comments_task(ctx, reel_id=reel_id))
+            await sync_reel_comments_task(ctx, reel_id=reel_id)
     except Exception:
         logger.exception("Failed to enqueue sync_reel_comments_task for reel_id=%s", reel_id)
         raise HTTPException(
@@ -175,18 +175,17 @@ async def sync_reels(
     """
     try:
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        if arq_pool:
+        if arq_pool and not settings.DISABLE_BG_WORKERS:
             await arq_pool.enqueue_job(
                 "sync_user_reels_task",
                 user_id=user_id,
                 limit=limit,
             )
         else:
-            import asyncio
             from app.workers.reel_tasks import sync_user_reels_task
             from app.db.session import AsyncSessionLocal
             ctx = {"db_session_factory": AsyncSessionLocal, "redis": None}
-            asyncio.create_task(sync_user_reels_task(ctx, user_id=user_id, limit=limit))
+            await sync_user_reels_task(ctx, user_id=user_id, limit=limit)
     except Exception:
         logger.exception("Failed to enqueue sync_user_reels_task for user_id=%s", user_id)
         raise HTTPException(
@@ -357,14 +356,13 @@ async def import_reel(
     # 6. Enqueue analysis
     try:
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        if arq_pool:
+        if arq_pool and not settings.DISABLE_BG_WORKERS:
             await arq_pool.enqueue_job("analyze_reel_task", reel_id=reel_id_to_analyze)
         else:
-            import asyncio
             from app.workers.reel_tasks import analyze_reel_task
             from app.db.session import AsyncSessionLocal
             ctx = {"db_session_factory": AsyncSessionLocal, "redis": None}
-            asyncio.create_task(analyze_reel_task(ctx, reel_id=reel_id_to_analyze))
+            await analyze_reel_task(ctx, reel_id=reel_id_to_analyze)
     except Exception:
         logger.exception("Failed to enqueue analyze_reel_task for imported reel_id=%s", reel_id_to_analyze)
 
@@ -407,17 +405,16 @@ async def analyze_reel(
 
     try:
         arq_pool = getattr(request.app.state, "arq_pool", None)
-        if arq_pool:
+        if arq_pool and not settings.DISABLE_BG_WORKERS:
             await arq_pool.enqueue_job(
                 "analyze_reel_task",
                 reel_id=reel_id,
             )
         else:
-            import asyncio
             from app.workers.reel_tasks import analyze_reel_task
             from app.db.session import AsyncSessionLocal
             ctx = {"db_session_factory": AsyncSessionLocal, "redis": None}
-            asyncio.create_task(analyze_reel_task(ctx, reel_id=reel_id))
+            await analyze_reel_task(ctx, reel_id=reel_id)
     except Exception:
         logger.exception("Failed to enqueue analyze_reel_task for reel_id=%s", reel_id)
         raise HTTPException(

@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    DISABLE_BG_WORKERS: bool = False
 
     # ── Meta Graph API ──────────────────────────────────────────────────
     META_GRAPH_API_VERSION: str = "v23.0"
