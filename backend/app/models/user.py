@@ -92,6 +92,7 @@ class UserToken(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_user_tokens_expires_at", "expires_at"),
         Index("ix_user_tokens_user_id", "user_id"),
+        Index("ix_user_tokens_user_expires", "user_id", "expires_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -1076,7 +1076,7 @@ export default function App() {
     if (token) {
       // Returning from Meta OAuth — save JWT and go to dashboard
       setAuthToken(token);
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({}, '', '/#/dashboard');
       setUser({ name: 'Instagram Creator', photo: '', email: '' });
       setView('dashboard');
     } else if (authError) {
@@ -1087,12 +1087,16 @@ export default function App() {
       // Existing session from a previous login
       setUser({ name: 'Instagram Creator', photo: '', email: '' });
       setView('dashboard');
+      if (!window.location.hash) {
+        window.location.hash = '#/dashboard';
+      }
     }
   }, []);
 
   const handleSignOutUser = async () => {
     await handleSignOut();
     setUser(null);
+    window.location.hash = '';
     setView('landing');
   };
 

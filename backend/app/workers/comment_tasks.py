@@ -180,6 +180,22 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
             await session.refresh(db_comment)
 
         # ------------------------------------------------------------ #
+        #  3.5. Evaluate and Trigger Comment-to-DM Automation (Independent)
+        # ------------------------------------------------------------ #
+        try:
+            from app.services.dm_automation_service import DMAutomationService
+            dm_service = DMAutomationService(session)
+            await dm_service.evaluate_and_send_dm(
+                user_id=reel.user_id,
+                reel_id=reel.id,
+                comment_id=comment_id,
+                comment_text=comment_text,
+                commenter_id=commenter_id,
+            )
+        except Exception as exc:
+            logger.warning("Comment-to-DM execution error: %s", exc)
+
+        # ------------------------------------------------------------ #
         #  4. Load creator preferences
         # ------------------------------------------------------------ #
         result = await session.execute(
@@ -244,6 +260,64 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
             return
 
         # ------------------------------------------------------------ #
+        #  4.5. Check Reel-Specific Automation Configuration
+        # ------------------------------------------------------------ #
+        from app.models.reel_automation import ReelAutomationConfig
+        result = await session.execute(
+            select(ReelAutomationConfig).where(ReelAutomationConfig.reel_id == reel.id)
+        )
+        reel_config = result.scalar_one_or_none()
+
+        if reel_config and not reel_config.ai_reply_enabled:
+            logger.info("AI Comment Reply is disabled specifically for reel %d. Skipping...", reel.id)
+            await session.execute(
+                update(Comment).where(Comment.id == db_comment.id).values(is_processed=True)
+            )
+            await session.commit()
+            return
+
+        # Prepare enhanced summary context with reel-specific instructions & reference material
+        reel_summary_data = summary.ai_summary if summary and summary.ai_summary else {}
+        if isinstance(reel_summary_data, dict):
+            reel_summary_data = dict(reel_summary_data)
+        else:
+            reel_summary_data = {}
+
+        if reel_config:
+            if reel_config.custom_instructions:
+                reel_summary_data["reel_custom_instructions"] = reel_config.custom_instructions
+            if reel_config.reference_knowledge:
+                reel_summary_data["reel_reference_knowledge"] = reel_config.reference_knowledge
+            
+            # Execute external Custom API if configured
+            if reel_config.api_enabled and reel_config.api_endpoint:
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
+                        api_headers = reel_config.api_headers or {}
+                        if reel_config.api_method == "POST":
+                            api_res = await client.post(
+                                reel_config.api_endpoint,
+                                headers=api_headers,
+                                json={"comment": comment_text, "user": commenter_username or ""},
+                            )
+                        else:
+                            api_res = await client.get(
+                                reel_config.api_endpoint,
+                                headers=api_headers,
+                                params={"query": comment_text},
+                            )
+                        if api_res.is_success:
+                            try:
+                                api_json = api_res.json()
+                            except Exception:
+                                api_json = api_res.text[:500]
+                            reel_summary_data["live_api_data"] = api_json
+                            logger.info("Successfully fetched live API data for reel %d", reel.id)
+                except Exception as api_err:
+                    logger.warning("Custom API tool call failed for reel %d: %s", reel.id, api_err)
+
+        # ------------------------------------------------------------ #
         #  5. Generate AI reply or route via Tier 2 Gatekeeper Classifier
         # ------------------------------------------------------------ #
         ai_service = AIAgentService()
@@ -277,7 +351,7 @@ async def process_comment_task(ctx: dict, comment_event: dict) -> None:
                 force_roast = (classification == "TROLL")
                 reply_result = await ai_service.generate_reply(
                     comment=comment_text,
-                    reel_summary=summary.ai_summary,
+                    reel_summary=reel_summary_data,
                     creator_style=creator.reply_style or creator.reply_tone,
                     creator_name=creator.username,
                     force_roast=force_roast,

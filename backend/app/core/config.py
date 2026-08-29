@@ -40,10 +40,11 @@ class Settings(BaseSettings):
     META_INSTAGRAM_USER_ID: str = ""  # Your Instagram Business Account ID
 
     # ── Groq / xAI / AI Providers ─────────────────────────────────────────
-    GROQ_API_KEY: str = ""           # Optional fallback text LLM
-    XAI_API_KEY: str = ""            # xAI (Grok API key)
-    GEMINI_API_KEY: str = ""         # Google Gemini 2.5 Flash API key
-    TAVILY_API_KEY: str = ""         # Web search API key
+    GROQ_API_KEY: str = ""                    # Primary Groq API key
+    GROQ_API_KEY_SECONDARY: str = ""          # Secondary/Backup Groq API key for rate limit failover
+    XAI_API_KEY: str = ""                     # xAI (Grok API key)
+    GEMINI_API_KEY: str = ""                  # Google Gemini 2.5 Flash API key
+    TAVILY_API_KEY: str = ""                  # Web search API key
     OPENROUTER_API_KEY: str = "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"
 
 

@@ -124,3 +124,47 @@ export async function scanVoiceProfile() {
   return await apiFetch('/users/me/scan-voice-profile', { method: 'POST' });
 }
 
+// Comment-to-DM Automations APIs
+export async function fetchDMRules() {
+  return await apiFetch('/dm-rules');
+}
+
+export async function upsertDMRule(ruleData) {
+  return await apiFetch('/dm-rules', {
+    method: 'POST',
+    body: JSON.stringify(ruleData),
+  });
+}
+
+export async function deleteDMRule(ruleId) {
+  return await apiFetch(`/dm-rules/${ruleId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function simulateDM(data) {
+  return await apiFetch('/dm-rules/simulate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// Reel-Specific Custom Automations & API Integration
+export async function fetchReelAutomationConfig(reelId) {
+  return await apiFetch(`/reels/${reelId}/automation-config`);
+}
+
+export async function saveReelAutomationConfig(reelId, payload) {
+  return await apiFetch(`/reels/${reelId}/automation-config`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function testReelCustomAPI(reelId, payload) {
+  return await apiFetch(`/reels/${reelId}/test-api`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

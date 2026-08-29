@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # -- Database Schema Auto-Migration --------------------------------
     try:
         from sqlalchemy import text
+        from app.models import Base
         async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS biography TEXT;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INT;"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS follows_count INT;"))
@@ -98,8 +100,8 @@ app = FastAPI(
     ),
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # -- CORS middleware ---------------------------------------------------
@@ -116,8 +118,21 @@ app.include_router(api_v1_router)
 
 
 # ======================================================================
-# Health checks
+# Root & Health checks
 # ======================================================================
+
+@app.get("/", tags=["Root"])
+async def root() -> dict[str, str]:
+    """Root status endpoint providing service information."""
+    return {
+        "service": "Pilotly AI Reply Engine API",
+        "status": "online",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "health": "/health",
+        "frontend": settings.FRONTEND_URL,
+    }
+
 
 @app.get("/health", tags=["Health"])
 async def health() -> dict[str, str]:

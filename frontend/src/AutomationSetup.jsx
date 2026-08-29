@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { updateUserSettings, triggerReelSync, fetchCurrentUser, fetchReels, scanVoiceProfile } from './api';
+import InstagramCommentPreview from './InstagramCommentPreview';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
@@ -46,14 +47,10 @@ const SAMPLE_COMMENTS = [
 ];
 
 const VOICE_MODES = [
-  { id: 'witty', label: 'Witty', icon: '🃏', desc: 'Fast, clever wordplay & sharp banter' },
-  { id: 'funny', label: 'Funny', icon: '😂', desc: 'Playful punchlines & humorous takes' },
-  { id: 'roast', label: 'Roast Mode', icon: '🔥', desc: 'Cheeky comebacks & hilarious burns' },
-  { id: 'sarcastic', label: 'Sarcastic', icon: '😏', desc: 'Deadpan humor & cheeky irony' },
-  { id: 'helpful_expert', label: 'Helpful Expert', icon: '🎓', desc: 'Clear, authoritative & educational' },
-  { id: 'casual_friend', label: 'Casual Friend', icon: '🤝', desc: 'Warm, conversational & friendly' },
-  { id: 'professional', label: 'Professional', icon: '💼', desc: 'Polished & customer support ready' },
-  { id: 'hype_friend', label: 'Hype Friend', icon: '⚡', desc: 'High energy & supportive' },
+  { id: 'casual_friend', label: 'Casual & Friendly', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2h-4.3l-2.7 2.7c-.4.4-1 .4-1.4 0L14 18V9z"/></svg>, desc: 'Replies like a peer. Uses emojis naturally, exclamation points, very warm.' },
+  { id: 'professional', label: 'Professional Support', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>, desc: 'Clear, polite, and helpful. Minimal emojis, proper grammar.' },
+  { id: 'hype_energetic', label: 'Hype & Energetic', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>, desc: 'High energy, exciting! Lots of caps, hype words (fire, exactly).' },
+  { id: 'witty_sarcastic', label: 'Witty & Playful', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>, desc: 'A bit of sass. Clever comebacks, teasing, very memorable.' },
 ];
 
 const QUICK_CHIPS = [
@@ -120,7 +117,7 @@ function StepSidebar({ currentStep, completedSteps }) {
 /* ════════════════════════════════════════════
    STEP 1: CONNECT
    ════════════════════════════════════════════ */
-function StepConnect({ onConnect, onConnectAdvanced, isConnected, hasAdvancedScopes }) {
+function StepConnect({ onConnect, onConnectAdvanced, isConnected, hasAdvancedScopes, apiUser, onContinue }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ maxWidth: 520, width: '100%' }}>
@@ -148,33 +145,34 @@ function StepConnect({ onConnect, onConnectAdvanced, isConnected, hasAdvancedSco
         </div>
 
         {isConnected ? (
-          hasAdvancedScopes ? (
-            <div className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: 12, borderColor: 'rgba(16,185,129,0.2)', background: 'rgba(16,185,129,0.06)' }}>
-              <svg style={{ width: 20, height: 20, color: 'var(--success)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--success)' }}>Instagram connected with advanced permissions!</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div className="ds-card" style={{ display: 'flex', alignItems: 'center', gap: 12, borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
-                <span style={{ fontSize: 18 }}>⚠️</span>
-                <span style={{ fontSize: 13, color: 'var(--warning)', fontWeight: 600 }}>Advanced comment permissions are required to automate replies.</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="ds-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.06)', padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                  {apiUser?.username ? apiUser.username[0]?.toUpperCase() : 'IG'}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {apiUser?.full_name || apiUser?.username || 'Instagram Account'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>●</span> Connected ({apiUser?.username ? `@${apiUser.username}` : 'Linked'})
+                  </div>
+                </div>
               </div>
-              <button onClick={onConnectAdvanced} className="ds-btn-primary" style={{ gap: 12, width: '100%', justifyContent: 'center' }}>
-                <svg style={{ width: 20, height: 20 }} fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
-                </svg>
-                Authorize Advanced Permissions
-              </button>
+              <span className="ds-badge ds-badge-success">Ready</span>
             </div>
-          )
+
+            <button onClick={onContinue} className="ds-btn-primary" style={{ padding: '12px 24px', fontSize: 14, width: '100%', justifyContent: 'center' }}>
+              Continue to Step 2: Scan Content →
+            </button>
+          </div>
         ) : (
-          <button onClick={onConnect} className="ds-btn-primary" style={{ gap: 12 }}>
+          <button onClick={onConnect} className="ds-btn-primary" style={{ gap: 12, padding: '12px 24px', fontSize: 14 }}>
             <svg style={{ width: 20, height: 20 }} fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
             </svg>
-            Connect Instagram
+            Connect Instagram via Meta
           </button>
         )}
       </div>
@@ -326,21 +324,27 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
       </div>
 
       {/* Sub-tab pills */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {subTabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveSubTab(tab.toLowerCase())}
-            style={{
-              padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600,
-              cursor: 'pointer', transition: 'all 0.15s', border: 'none',
-              background: activeSubTab === tab.toLowerCase() ? 'var(--accent)' : 'var(--bg-hover)',
-              color: activeSubTab === tab.toLowerCase() ? '#fff' : 'var(--text-muted)',
-            }}
-          >
-            {tab}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        {subTabs.map((tab) => {
+          const isActive = activeSubTab === tab.toLowerCase();
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveSubTab(tab.toLowerCase())}
+              style={{
+                padding: '8px 18px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', transition: 'all 0.3s ease',
+                border: isActive ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)',
+                background: isActive ? 'rgba(59,130,246,0.1)' : 'rgba(17,24,39,0.5)',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                boxShadow: isActive ? '0 0 16px rgba(59,130,246,0.1)' : 'none',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              {tab}
+            </button>
+          );
+        })}
       </div>
 
       {/* Identity Tab */}
@@ -400,7 +404,7 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
             rows={10}
             placeholder="Tell your AI what to know about your business..."
             className="ds-input"
-            style={{ resize: 'none', fontFamily: 'monospace' }}
+            style={{ resize: 'vertical', fontFamily: 'var(--font-family-sans)', fontSize: 13, lineHeight: 1.6 }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8 }}>
             <button onClick={() => setActiveSubTab('brand dna')} className="ds-btn-ghost">← Back</button>
@@ -422,18 +426,18 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
                     if (m.desc) update('tone_description', m.desc);
                   }}
                   style={{
-                    padding: 12, borderRadius: 'var(--radius-card)', cursor: 'pointer',
-                    transition: 'all 0.15s', display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: 14, borderRadius: 'var(--radius-card)', cursor: 'pointer',
+                    transition: 'all 0.2s', display: 'flex', alignItems: 'flex-start', gap: 10,
                     border: (voiceProfile.mode || 'casual_friend') === m.id ? '1px solid var(--accent)' : '1px solid var(--border)',
-                    background: (voiceProfile.mode || 'casual_friend') === m.id ? 'var(--accent-glow)' : 'var(--bg-card)',
+                    background: (voiceProfile.mode || 'casual_friend') === m.id ? 'rgba(0,149,246,0.05)' : '#FFFFFF',
                   }}
                 >
-                  <span style={{ fontSize: 20 }}>{m.icon}</span>
+                  <span style={{ lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {m.label}
                       {(voiceProfile.mode || 'casual_friend') === m.id && (
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 6px var(--success)' }} />
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: 2 }}>{m.desc}</div>
@@ -630,203 +634,155 @@ function StepVoice({ voiceProfile, setVoiceProfile, apiUser, onComplete }) {
 }
 
 /* ════════════════════════════════════════════
-   STEP 4: PREVIEW (INTERACTIVE LIVE AI SANDBOX CHAT)
+   STEP 4: PREVIEW (LIVE DARK THEME INSTAGRAM COMMENT SIMULATOR)
    ════════════════════════════════════════════ */
-function StepPreview({ voiceProfile, onComplete }) {
+function StepPreview({ voiceProfile, apiUser, onComplete }) {
   const activeMode = voiceProfile.mode || 'casual_friend';
   const activeModeObj = VOICE_MODES.find((m) => m.id === activeMode) || VOICE_MODES[5];
-  
-  const chatContainerRef = React.useRef(null);
-  
-  const [chatMessages, setChatMessages] = useState([
-    {
-      id: 1,
-      sender: 'user',
-      text: 'Why are your prices so high?',
-    },
-    {
-      id: 2,
-      sender: 'ai',
-      text: 'Quality isn\'t cheap! We put extreme care into every single detail so you get real, massive value.',
-      mode: activeMode,
-    }
-  ]);
-  const [inputComment, setInputComment] = useState('');
-  const [sending, setSending] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [testInput, setTestInput] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const previewRef = React.useRef(null);
 
-  React.useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
-  }, [chatMessages, sending]);
-
-  const handleSendTestMessage = async (customText = null) => {
-    const textToSubmit = customText || inputComment;
-    if (!textToSubmit.trim() || sending) return;
-
-    const userMsg = { id: Date.now(), sender: 'user', text: textToSubmit };
-    setChatMessages((prev) => [...prev, userMsg]);
-    if (!customText) setInputComment('');
-    setSending(true);
-
-    try {
-      const res = await fetch(`${API_BASE.replace('/api/v1', '')}/api/v1/demo/draft-reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          comment: textToSubmit,
-          mode: activeMode,
-          business_name: voiceProfile.business_name || '',
-          knowledge: voiceProfile.knowledge || '',
-        }),
-      });
-      const data = await res.json();
-      const aiReply = data.reply || 'Reply generated in your voice.';
-
-      setChatMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, sender: 'ai', text: aiReply, mode: activeMode }
-      ]);
-    } catch {
-      setChatMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, sender: 'ai', text: 'Reply generated in your voice.', mode: activeMode }
-      ]);
-    } finally {
-      setSending(false);
-    }
-  };
+  const quickChips = [
+    "What's the difference between amazon gpus and nvidia gpus",
+    "Where can I buy this?",
+    "Why are prices so high? 🤔",
+    "Can you break down the strategy in your next video?",
+    "Is this suitable for beginners?",
+  ];
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)' }}>Step 4 · Live Sandbox Chat</div>
+        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-muted)' }}>Step 4 · Live Instagram Simulator</div>
         <span className="ds-badge ds-badge-success">✨ Live AI Sandbox</span>
       </div>
       <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Test your AI in Real-Time</h2>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-        Test how your AI replies using the exact Voice Mode you configured in Step 3.
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Test how your AI replies using your configured persona and voice mode in an authentic Instagram dark theme interface.
       </p>
 
-      {/* Locked Active Mode Banner */}
-      <div className="ds-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', marginBottom: 12, borderColor: 'rgba(124,58,237,0.2)', background: 'var(--accent-glow)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-          <span style={{ fontWeight: 600, color: 'var(--accent-light)' }}>Configured Voice Mode:</span>
-          <span className="ds-badge ds-badge-purple">
-            {activeModeObj.icon} {activeModeObj.label}
-          </span>
-        </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Locked to Step 3 Selection</span>
-      </div>
-
-      {/* Sandbox Chat Window */}
-      <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border)', padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 320 }}>
-        {/* Messages Feed */}
-        <div ref={chatContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', maxHeight: 220, paddingRight: 8 }}>
-          {chatMessages.map((msg) => (
-            <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
-              <div style={{
-                maxWidth: '85%', borderRadius: 16, padding: '10px 16px', fontSize: 13,
-                background: msg.sender === 'user' ? 'var(--bg-hover)' : 'var(--accent-glow)',
-                color: msg.sender === 'user' ? 'var(--text-primary)' : 'var(--accent-light)',
-                border: msg.sender === 'user' ? '1px solid var(--border)' : '1px solid rgba(124,58,237,0.2)',
-                borderBottomRightRadius: msg.sender === 'user' ? 4 : 16,
-                borderBottomLeftRadius: msg.sender === 'ai' ? 4 : 16,
-              }}>
-                {msg.sender === 'ai' && (
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    🤖 Pilotly AI ({activeModeObj.label})
-                  </div>
-                )}
-                <div style={{ lineHeight: 1.5, color: msg.sender === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{msg.text}</div>
-              </div>
+      {/* 2-Column Split Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28, alignItems: 'start' }}>
+        {/* Left Side: Summary & Live Prompt Input Box */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Active Persona Banner */}
+          <div className="ds-card" style={{ padding: '14px 16px', borderColor: 'rgba(0,149,246,0.2)', background: 'var(--accent-glow)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+              Active Persona Setup
             </div>
-          ))}
-          {sending && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--accent-light)', fontStyle: 'italic', padding: '4px 8px' }}>
-              <div style={{ width: 12, height: 12, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              <span>AI is drafting reply in {activeModeObj.label}...</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+              <div><span style={{ color: 'var(--text-muted)' }}>Voice Mode:</span> <strong style={{ color: 'var(--text-primary)', marginLeft: 4 }}>{activeModeObj.icon} {activeModeObj.label}</strong></div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Business/Brand:</span> <span style={{ color: 'var(--text-secondary)', marginLeft: 4 }}>{voiceProfile.business_name || apiUser?.full_name || 'Creator Brand'}</span></div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Tone:</span> <span style={{ color: 'var(--text-secondary)', marginLeft: 4 }}>{voiceProfile.tone_description || activeModeObj.desc}</span></div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Quick Test Chips */}
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 8 }}>Quick Test Prompts</div>
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }}>
-            {QUICK_CHIPS.map((chip) => (
+          {/* Test Live Comment Prompts & Input Box (Replaces static info box) */}
+          <div className="ds-card" style={{ padding: '16px', background: '#FFFFFF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+                ⚡ Test Live Comment Prompts
+              </span>
+              <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>Interactive</span>
+            </div>
+
+            {/* Input Box */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input
+                type="text"
+                value={testInput}
+                onChange={(e) => setTestInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && testInput.trim()) {
+                    if (previewRef.current) previewRef.current.postComment(testInput);
+                    setTestInput('');
+                  }
+                }}
+                placeholder="Type a test follower comment..."
+                className="ds-input"
+                style={{ flex: 1, fontSize: 13, caretColor: 'var(--accent)' }}
+              />
               <button
-                key={chip}
-                onClick={() => handleSendTestMessage(chip)}
-                disabled={sending}
-                className="ds-btn-ghost-sm"
-                style={{ flexShrink: 0, fontSize: 11 }}
+                onClick={() => {
+                  if (testInput.trim() && previewRef.current) {
+                    previewRef.current.postComment(testInput);
+                    setTestInput('');
+                  }
+                }}
+                disabled={!testInput.trim()}
+                className="ds-btn-primary-sm"
+                style={{ fontSize: 12, padding: '8px 16px', fontWeight: 600 }}
               >
-                {chip}
+                Post →
               </button>
-            ))}
+            </div>
+
+            {/* Quick Chips */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {quickChips.map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    if (previewRef.current) previewRef.current.postComment(chip);
+                  }}
+                  className="ds-btn-ghost-sm"
+                  style={{ fontSize: 11, padding: '5px 10px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                >
+                  "{chip.length > 30 ? chip.substring(0, 30) + '…' : chip}"
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Chat Input */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <input
-              type="text"
-              value={inputComment}
-              onChange={(e) => setInputComment(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendTestMessage()}
-              placeholder={`Type a comment to test ${activeModeObj.label}...`}
-              className="ds-input"
-              style={{ flex: 1 }}
-            />
-            <button
-              onClick={() => handleSendTestMessage()}
-              disabled={sending || !inputComment.trim()}
-              className="ds-btn-primary"
-              style={{ padding: '10px 20px', fontSize: 13 }}
-            >
-              Test →
-            </button>
+          {/* Confirmation & Continue */}
+          <div
+            onClick={() => setApproved(!approved)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              borderRadius: 'var(--radius-card)', padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s',
+              border: approved ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+              background: approved ? 'var(--accent-glow)' : 'var(--bg-card)',
+            }}
+          >
+            <div style={{
+              width: 20, height: 20, borderRadius: 4,
+              border: approved ? '2px solid var(--accent)' : '2px solid var(--border)',
+              background: approved ? 'var(--accent)' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+            }}>
+              {approved && (
+                <svg style={{ width: 12, height: 12, color: '#fff' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>I tested the live AI replies and approve this voice direction.</span>
           </div>
+
+          <button
+            onClick={onComplete}
+            disabled={!approved}
+            className="ds-btn-primary"
+            style={{ padding: '10px 24px', fontSize: 14, fontWeight: 600, opacity: approved ? 1 : 0.4, cursor: approved ? 'pointer' : 'not-allowed' }}
+          >
+            Continue to Step 5 (Autopilot Rules) →
+          </button>
+        </div>
+
+        {/* Right Side: Live Dark Theme Instagram Comment Phone Simulator (Positioned at Top) */}
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <InstagramCommentPreview
+            ref={previewRef}
+            apiUser={apiUser}
+            voiceProfile={{
+              ...voiceProfile,
+              tone_description: activeModeObj?.label,
+            }}
+          />
         </div>
       </div>
-
-      {/* Confirmation & Continue */}
-      <div
-        onClick={() => setApproved(!approved)}
-        style={{
-          marginTop: 16, display: 'flex', alignItems: 'center', gap: 12,
-          borderRadius: 'var(--radius-card)', padding: '12px 16px', cursor: 'pointer', transition: 'all 0.15s',
-          border: approved ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border)',
-          background: approved ? 'rgba(16,185,129,0.06)' : 'var(--bg-card)',
-        }}
-      >
-        <div style={{
-          width: 20, height: 20, borderRadius: 4,
-          border: approved ? '2px solid var(--success)' : '2px solid var(--border)',
-          background: approved ? 'var(--success)' : 'transparent',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-        }}>
-          {approved && (
-            <svg style={{ width: 12, height: 12, color: '#fff' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>I tested the live AI replies and approve this voice direction.</span>
-      </div>
-
-      <button
-        onClick={onComplete}
-        disabled={!approved}
-        className="ds-btn-primary"
-        style={{ marginTop: 12, alignSelf: 'flex-start', opacity: approved ? 1 : 0.4 }}
-      >
-        Continue to Automations →
-      </button>
     </div>
   );
 }
@@ -950,17 +906,22 @@ function StepAutomations({ voiceProfile, setVoiceProfile, apiUser, onComplete })
    ════════════════════════════════════════════ */
 function StepGoLive({ voiceProfile, apiUser, onFinish }) {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', position: 'relative' }}>
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        style={{ maxWidth: 420 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        style={{ maxWidth: 420, position: 'relative', zIndex: 1 }}
       >
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-        <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Your AI is ready!</h2>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 32 }}>
-          {apiUser?.username ? `@${apiUser.username}'s` : 'Your'} AI reply agent is now active and will start processing incoming comments.
+        <motion.div
+          initial={{ scale: 0, rotate: -10 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+          style={{ fontSize: 56, marginBottom: 16 }}
+        >🎉</motion.div>
+        <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.02em' }}>Your AI is ready!</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 32, lineHeight: 1.6 }}>
+          {apiUser?.username ? `@${apiUser.username}'s` : 'Your'} AI reply agent is now configured and ready to process incoming comments.
         </p>
 
         <div className="ds-card" style={{ textAlign: 'left', marginBottom: 32 }}>
@@ -984,8 +945,8 @@ function StepGoLive({ voiceProfile, apiUser, onFinish }) {
           </div>
         </div>
 
-        <button onClick={onFinish} className="ds-btn-primary" style={{ padding: '12px 32px', fontSize: 14 }}>
-          Go to Dashboard →
+        <button onClick={onFinish} className="ds-btn-primary" style={{ padding: '12px 36px', fontSize: 14, width: '100%', justifyContent: 'center' }}>
+          Save & Activate Automation →
         </button>
       </motion.div>
     </div>
@@ -1027,11 +988,8 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect, onConn
         ...prev,
         business_name: apiUser.full_name || apiUser.username || prev.business_name,
       }));
-      if (isConnected && hasAdvancedScopes && currentStep === 1) {
-        completeStep(1);
-      }
     }
-  }, [apiUser, isConnected, hasAdvancedScopes]);
+  }, [apiUser]);
 
   const completeStep = (stepId, generatedData = null) => {
     if (generatedData) {
@@ -1065,12 +1023,39 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect, onConn
   };
 
   return (
-    <div style={{ height: '100vh', maxHeight: '100vh', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)', display: 'flex' }}>
+    <div style={{ height: '100vh', maxHeight: '100vh', width: '100%', overflow: 'hidden', background: '#FFFFFF', display: 'flex', position: 'relative' }}>
+      {/* Close Wizard Button */}
+      <button
+        onClick={onComplete}
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: 24,
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: '50%',
+          width: 36,
+          height: 36,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          zIndex: 100,
+          transition: 'all 0.15s ease',
+        }}
+        title="Exit to Dashboard"
+      >
+        <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
       {/* Left sidebar */}
-      <div style={{ width: 256, padding: 32, flexShrink: 0, height: '100%', overflowY: 'auto', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)' }}>
+      <div style={{ width: 256, padding: 32, flexShrink: 0, height: '100%', overflowY: 'auto', background: '#FAFAFA', borderRight: '1px solid var(--border)' }}>
         {/* Logo */}
         <div style={{ marginBottom: 32 }}>
-          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 18, color: '#000000', display: 'flex', alignItems: 'center', gap: 4, letterSpacing: '-0.01em' }}>
             Pilotly<span style={{ color: 'var(--accent)' }}>.ai</span>
           </span>
         </div>
@@ -1078,7 +1063,7 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect, onConn
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, height: '100%', padding: 32, overflowY: 'auto' }}>
+      <div style={{ flex: 1, height: '100%', padding: '32px 48px', overflowY: 'auto' }}>
         <AnimatePresence mode="wait">
           {currentStep === 1 && (
             <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
@@ -1087,14 +1072,9 @@ export default function AutomationSetup({ apiUser, onComplete, onConnect, onConn
                 onConnectAdvanced={onConnectAdvanced} 
                 isConnected={isConnected} 
                 hasAdvancedScopes={hasAdvancedScopes} 
+                apiUser={apiUser}
+                onContinue={() => completeStep(1)}
               />
-              {isConnected && hasAdvancedScopes && (
-                <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-                  <button onClick={() => completeStep(1)} className="ds-btn-primary">
-                    Continue →
-                  </button>
-                </div>
-              )}
             </motion.div>
           )}
           {currentStep === 2 && (

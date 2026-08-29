@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AutomationSetup from './AutomationSetup';
+import CommentDMSetup from './CommentDMSetup';
+import InstagramCommentPreview from './InstagramCommentPreview';
+import ReelAutomationCustomizer from './ReelAutomationCustomizer';
 import {
   fetchCurrentUser,
   fetchReels,
@@ -56,10 +59,73 @@ const IconSync = () => (
 export default function Dashboard({ user, onSignOut }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showSetupWizard, setShowSetupWizard] = useState(false);
-  const [selectedAutomation, setSelectedAutomation] = useState(null); // null | 'ai-reply'
+  const [selectedAutomation, setSelectedAutomation] = useState(null); // null | 'ai-reply' | 'comment-to-dm'
+  const [customizingReelId, setCustomizingReelId] = useState(null); // number | null
   const [inboxSubFilter, setInboxSubFilter] = useState('pending'); // 'pending' | 'posted'
   const [showScopePromptModal, setShowScopePromptModal] = useState(false);
 
+  // Sync state from current URL hash (enables native browser back/forward buttons)
+  const syncStateFromHash = () => {
+    const hash = window.location.hash || '#/dashboard';
+    if (hash.startsWith('#/setup-wizard')) {
+      setShowSetupWizard(true);
+      setCustomizingReelId(null);
+    } else if (hash.startsWith('#/reel/') && hash.includes('/custom-automation')) {
+      setShowSetupWizard(false);
+      const match = hash.match(/#\/reel\/(\d+)\/custom-automation/);
+      if (match) {
+        setCustomizingReelId(parseInt(match[1]));
+      }
+      setSelectedAutomation(null);
+    } else if (hash.startsWith('#/automations/comment-to-dm') || hash.startsWith('#/my-automations/comment-to-dm')) {
+      setShowSetupWizard(false);
+      setCustomizingReelId(null);
+      setActiveTab('my-automations');
+      setSelectedAutomation('comment-to-dm');
+    } else if (hash.startsWith('#/automations/ai-reply') || hash.startsWith('#/my-automations/ai-reply')) {
+      setShowSetupWizard(false);
+      setCustomizingReelId(null);
+      setActiveTab('my-automations');
+      setSelectedAutomation('ai-reply');
+    } else if (hash.startsWith('#/automations') || hash.startsWith('#/my-automations')) {
+      setShowSetupWizard(false);
+      setCustomizingReelId(null);
+      setActiveTab('my-automations');
+      setSelectedAutomation(null);
+    } else if (hash.startsWith('#/settings')) {
+      setShowSetupWizard(false);
+      setCustomizingReelId(null);
+      setActiveTab('settings');
+      setSelectedAutomation(null);
+    } else {
+      setShowSetupWizard(false);
+      setCustomizingReelId(null);
+      setActiveTab('dashboard');
+      setSelectedAutomation(null);
+    }
+  };
+
+  // Helper to change view and push history state
+  const navigateTo = (newHash) => {
+    if (window.location.hash !== newHash) {
+      window.location.hash = newHash;
+    }
+    syncStateFromHash();
+  };
+
+  // Listen for browser Back / Forward arrow clicks
+  useEffect(() => {
+    syncStateFromHash();
+    const handlePopState = () => {
+      syncStateFromHash();
+    };
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, []);
 
   // Real Backend State
   const [apiUser, setApiUser] = useState(null);
@@ -280,6 +346,26 @@ export default function Dashboard({ user, onSignOut }) {
     }
   };
 
+  const handleUpdateVoiceConfig = async (key, value) => {
+    if (!apiUser) return;
+    let styleObj = {};
+    try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
+    styleObj[key] = value;
+
+    try {
+      const payload = {
+        auto_reply_enabled: key === 'auto_reply_enabled' ? value : (apiUser.auto_reply_enabled || false),
+        reply_tone: key === 'persona' ? value : (apiUser.reply_tone || 'friendly'),
+        reply_style: JSON.stringify(styleObj),
+      };
+      const updated = await updateUserSettings(payload);
+      setApiUser(updated);
+      showNotification('Setting updated successfully');
+    } catch (err) {
+      showNotification(`Error: ${err.message || 'Failed to update setting'}`);
+    }
+  };
+
   // Filtered comments for Approval Queue
   const filteredComments = apiComments.filter((comment) => {
     if (inboxSubFilter === 'pending') {
@@ -306,15 +392,50 @@ export default function Dashboard({ user, onSignOut }) {
 
   if (loading) {
     return (
-      <div style={{ background: 'var(--bg-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-        <IconSync />
-        <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', animation: 'pulse 2s infinite' }}>Loading Engine Dashboard</span>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        style={{
+          background: '#FFFFFF',
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 24,
+        }}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}
+        >
+          <span style={{ fontWeight: 700, fontSize: 28, color: '#000000', letterSpacing: '-0.02em' }}>
+            Pilotly<span style={{ color: 'var(--accent)' }}>.ai</span>
+          </span>
+          <div style={{ width: 200, height: 2, borderRadius: 2, background: '#EFEFEF', overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
+              animation: 'loadingBar 1.8s ease-in-out infinite',
+            }} />
+          </div>
+          <span style={{
+            color: 'var(--text-muted)',
+            fontSize: 12,
+            fontWeight: 400,
+          }}>
+            Loading your dashboard…
+          </span>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} className="flex flex-col antialiased">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}>
       {/* Toast Notification */}
       <AnimatePresence>
         {actionMessage && (
@@ -323,15 +444,14 @@ export default function Dashboard({ user, onSignOut }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             style={{
-              position: 'fixed', top: 24, right: 24, zIndex: 50,
+              position: 'fixed', top: 16, right: 16, zIndex: 100,
               padding: '12px 16px', borderRadius: 'var(--radius-card)',
-              border: `1px solid ${actionMessage.toLowerCase().startsWith('error') ? 'rgba(239,68,68,0.3)' : 'rgba(124,58,237,0.2)'}`,
-              background: actionMessage.toLowerCase().startsWith('error') ? 'rgba(239,68,68,0.1)' : 'var(--bg-card)',
+              border: `1px solid ${actionMessage.toLowerCase().startsWith('error') ? 'rgba(237,73,86,0.3)' : 'var(--border)'}`,
+              background: '#FFFFFF',
               display: 'flex', alignItems: 'center', gap: 10,
-              fontSize: 12, fontWeight: 600,
-              color: actionMessage.toLowerCase().startsWith('error') ? 'var(--error)' : 'var(--accent-light)',
-              backdropFilter: 'blur(12px)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              fontSize: 14, fontWeight: 400,
+              color: actionMessage.toLowerCase().startsWith('error') ? 'var(--error)' : 'var(--text-primary)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             }}
           >
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: actionMessage.toLowerCase().startsWith('error') ? 'var(--error)' : 'var(--accent)' }} />
@@ -340,126 +460,93 @@ export default function Dashboard({ user, onSignOut }) {
         )}
       </AnimatePresence>
 
-      {/* ═══════════════ PRIMARY TOP HEADER ═══════════════ */}
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-          width: '100%',
-          height: 64,
-          background: 'var(--bg-sidebar)',
-          borderBottom: '1px solid var(--border)',
-          backdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-        }}
-      >
-        {/* Left: Logo + Navigation Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          <span
-            style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Pilotly<span style={{ color: 'var(--accent)' }}>.ai</span>
-          </span>
-
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {[
-              { id: 'dashboard', label: 'Dashboard' },
-              { id: 'my-automations', label: 'Automations' },
-              { id: 'settings', label: 'Settings' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  height: 36,
-                  padding: '0 16px',
-                  borderRadius: 'var(--radius-button)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  border: activeTab === item.id ? '1px solid rgba(124,58,237,0.3)' : '1px solid transparent',
-                  background: activeTab === item.id ? 'rgba(124,58,237,0.15)' : 'transparent',
-                  color: activeTab === item.id ? 'var(--text-primary)' : 'var(--text-muted)',
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+      {/* ═══════════════ INSTAGRAM-STYLE LEFT SIDEBAR ═══════════════ */}
+      <aside className="ig-sidebar">
+        {/* Logo */}
+        <div className="ig-sidebar-logo">
+          <svg className="ig-sidebar-logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span className="ig-sidebar-logo-text">Pilotly.ai</span>
         </div>
 
-        {/* Right: Profile & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {isInstagramConnected && (
-            <span className="ds-badge ds-badge-success" style={{ fontSize: 11 }}>
-              ● Connected
-            </span>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 12px', background: 'var(--bg-card)', borderRadius: 999, border: '1px solid var(--border)' }}>
+        {/* Nav Items */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+          {[
+            { id: 'dashboard', label: 'Dashboard', hash: '#/dashboard', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" /></svg> },
+            { id: 'my-automations', label: 'Automations', hash: '#/automations', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> },
+            { id: 'settings', label: 'Settings', hash: '#/settings', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg> },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => navigateTo(item.hash)}
+              className={`ig-nav-item ${activeTab === item.id ? 'ig-nav-item-active' : ''}`}
+            >
+              {item.icon}
+              <span className="ig-nav-label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Bottom section */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {/* Profile */}
+          <button className="ig-nav-item" style={{ cursor: 'default' }}>
             <img
               src={apiUser?.profile_picture_url || user?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
               alt="Profile"
-              style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }}
+              style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
             />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-              {apiUser?.username ? `@${apiUser.username}` : 'Creator'}
+            <span className="ig-nav-label" style={{ fontSize: 14 }}>
+              {apiUser?.username ? `@${apiUser.username}` : 'Profile'}
             </span>
-          </div>
-          <button
-            onClick={onSignOut}
-            style={{
-              color: 'var(--text-muted)',
-              background: 'none',
-              border: '1px solid var(--border)',
-              cursor: 'pointer',
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-button)',
-              fontSize: 12,
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              transition: 'all 0.15s',
-            }}
-          >
+          </button>
+          {/* Sign out */}
+          <button onClick={onSignOut} className="ig-nav-item">
             <IconSignOut />
-            <span className="hidden sm:inline">Sign Out</span>
+            <span className="ig-nav-label">Sign Out</span>
           </button>
         </div>
-      </header>
+      </aside>
 
       {/* ═══════════════ MAIN CONTENT AREA ═══════════════ */}
-      <main style={{ flex: 1, padding: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+      <main style={{ marginLeft: 'var(--sidebar-width)', padding: '32px 48px', width: 'calc(100% - var(--sidebar-width))', maxWidth: '100%', boxSizing: 'border-box', transition: 'margin-left 0.3s ease' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)', width: '100%', maxWidth: '100%' }}>
 
-        {/* ACCOUNT NOT CONNECTED ALERT BANNER */}
-        {!isInstagramConnected && (
-          <div className="ds-card" style={{ borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} className="sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Action Required: Instagram Business Account Not Linked
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-                  To fetch Reels and trigger intelligent replies, authenticate via Meta OAuth.
-                </p>
+        {/* ═══════════════ REEL SPECIFIC CUSTOM AUTOMATION STUDIO ═══════════════ */}
+        {customizingReelId ? (
+          <ReelAutomationCustomizer
+            reel={apiReels.find((r) => r.id === customizingReelId) || { id: customizingReelId }}
+            apiUser={apiUser}
+            onBack={() => navigateTo('#/dashboard')}
+            onSaveSuccess={() => {
+              loadDashboardData();
+            }}
+          />
+        ) : (
+          <>
+            {/* ACCOUNT NOT CONNECTED ALERT BANNER */}
+            {!isInstagramConnected && (
+              <div className="ds-card" style={{ borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} className="sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Action Required: Instagram Business Account Not Linked
+                    </h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      To fetch Reels and trigger intelligent replies, authenticate via Meta OAuth.
+                    </p>
+                  </div>
+                  <button onClick={handleConnectInstagram} className="ds-btn-primary" style={{ flexShrink: 0 }}>
+                    Connect Instagram via Meta
+                  </button>
+                </div>
               </div>
-              <button onClick={handleConnectInstagram} className="ds-btn-primary" style={{ flexShrink: 0 }}>
-                Connect Instagram via Meta
-              </button>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* ═══════════════ TAB 1: DASHBOARD & REELS FEED ═══════════════ */}
-        {activeTab === 'dashboard' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+            {/* ═══════════════ TAB 1: DASHBOARD & REELS FEED ═══════════════ */}
+            {activeTab === 'dashboard' && (
+              <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
 
             {/* Creator Profile Card */}
             <div className="ds-card" style={{ padding: 'var(--card-padding)' }}>
@@ -467,11 +554,11 @@ export default function Dashboard({ user, onSignOut }) {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   {/* Avatar */}
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), #EC4899, #F59E0B)', padding: 2, flexShrink: 0 }}>
+                  <div style={{ width: 80, height: 80, borderRadius: '50%', border: '2px solid #DBDBDB', padding: 3, flexShrink: 0 }}>
                     <img
                       src={apiUser?.profile_picture_url || user?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
                       alt="Profile"
-                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--bg-card)' }}
+                      style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
                     />
                   </div>
                   <div>
@@ -509,16 +596,16 @@ export default function Dashboard({ user, onSignOut }) {
                 </button>
               </div>
 
-              {/* Stats Pills Row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--element-gap)', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              {/* Stats Row — Instagram style */}
+              <div style={{ display: 'flex', gap: 40, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-light)' }}>
                 {[
-                  { label: 'Posts', value: apiUser?.media_count ?? apiReels.length },
-                  { label: 'Followers', value: apiUser?.followers_count ?? 0 },
-                  { label: 'Following', value: apiUser?.follows_count ?? 0 },
+                  { label: 'posts', value: apiUser?.media_count ?? apiReels.length },
+                  { label: 'followers', value: apiUser?.followers_count ?? 0 },
+                  { label: 'following', value: apiUser?.follows_count ?? 0 },
                 ].map((stat) => (
-                  <div key={stat.label} style={{ background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                  <div key={stat.label} style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</span>{' '}
+                    <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{stat.label}</span>
                   </div>
                 ))}
               </div>
@@ -545,32 +632,36 @@ export default function Dashboard({ user, onSignOut }) {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 'var(--section-gap)' }}>
-                {apiReels.map((reel) => (
-                  <div
-                    key={reel.id || reel.media_id}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--element-gap)' }}>
+                {apiReels.map((reel, index) => (
+                  <motion.div
+                    key={reel.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-50px' }}
+                    transition={{ duration: 0.5, delay: index * 0.05 }}
                     className="ds-card"
                     style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}
                   >
                     {/* Thumbnail */}
-                    <div style={{ position: 'relative', height: 180, overflow: 'hidden' }}>
+                    <div
+                      style={{ position: 'relative', height: 200, overflow: 'hidden', transition: 'transform 0.4s ease' }}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.03)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
                       <img
                         src={reel.thumbnail_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'}
                         alt="Thumbnail"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-card) var(--radius-card) 0 0', transition: 'transform 0.3s' }}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-card) var(--radius-card) 0 0' }}
                       />
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 50%)', pointerEvents: 'none' }} />
 
                       {/* Analysis Badge */}
                       <span
-                        className={`ds-badge ${reel.is_analyzed ? (reel.summary?.analysis_model === 'failed' ? 'ds-badge-error' : 'ds-badge-success') : 'ds-badge-muted'}`}
-                        style={{ position: 'absolute', top: 10, left: 10, fontSize: 10 }}
+                        className={`ds-badge ${reel.is_analyzed ? 'ds-badge-purple' : 'ds-badge-muted'}`}
+                        style={{ position: 'absolute', top: 12, right: 12, backdropFilter: 'blur(6px)' }}
                       >
-                        {reel.is_analyzed
-                          ? reel.summary?.analysis_model === 'failed'
-                            ? 'Failed'
-                            : '● Analyzed'
-                          : 'Not Analyzed'}
+                        {reel.is_analyzed ? '✨ Analyzed' : 'Not analyzed'}
                       </span>
                     </div>
 
@@ -597,16 +688,15 @@ export default function Dashboard({ user, onSignOut }) {
                           {fetchingReelDetail ? 'Loading…' : 'View Summary'}
                         </button>
                         <button
-                          onClick={(e) => handleAnalyzeReel(e, reel.id)}
-                          disabled={analyzingReels[reel.id]}
+                          onClick={() => navigateTo(`#/reel/${reel.id}/custom-automation`)}
                           className="ds-btn-primary-sm"
-                          style={{ flex: 1, opacity: analyzingReels[reel.id] ? 0.7 : 1 }}
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                         >
-                          {analyzingReels[reel.id] ? 'Analyzing…' : 'Analyze'}
+                          ⚙️ Customize Automation
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -616,13 +706,21 @@ export default function Dashboard({ user, onSignOut }) {
         {/* ═══════════════ TAB 2: MY AUTOMATIONS ═══════════════ */}
         {activeTab === 'my-automations' && (
           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-            {selectedAutomation === 'ai-reply' ? (
+            {selectedAutomation === 'comment-to-dm' ? (
+              /* ──── COMMENT-TO-DM DEDICATED MANAGER ──── */
+              <CommentDMSetup
+                apiUser={apiUser}
+                apiReels={apiReels}
+                onBack={() => navigateTo('#/automations')}
+                onSyncReels={handleSyncReels}
+              />
+            ) : selectedAutomation === 'ai-reply' ? (
               /* ──── AUTOMATION DETAIL VIEW ──── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
                 {/* Header Row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <button
-                    onClick={() => setSelectedAutomation(null)}
+                    onClick={() => navigateTo('#/automations')}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s' }}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -638,7 +736,7 @@ export default function Dashboard({ user, onSignOut }) {
                     <button onClick={toggleAutoReplySetting} className="ds-btn-ghost" style={{ padding: '8px 16px', fontSize: 12 }}>
                       {apiUser?.auto_reply_enabled ? 'Pause Automation' : 'Enable Automation'}
                     </button>
-                    <button onClick={() => setShowSetupWizard(true)} className="ds-btn-primary" style={{ padding: '8px 16px', fontSize: 12 }}>
+                    <button onClick={() => navigateTo('#/setup-wizard')} className="ds-btn-primary" style={{ padding: '8px 16px', fontSize: 12 }}>
                       Edit Setup
                     </button>
                   </div>
@@ -688,220 +786,243 @@ export default function Dashboard({ user, onSignOut }) {
                   </div>
                 </div>
 
-                {/* Configuration Section */}
+                {/* 2-Column Split Layout: Configuration & Queue on Left, Live Dark Theme Phone Simulator on Right */}
                 {(() => {
                   let styleObj = {};
                   try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
                   
                   return (
-                    <>
-                      <div className="ds-section-header" style={{ marginBottom: -8 }}>
-                        <span>ACTIVE VOICE & PERSONA CONFIGURATION</span>
-                        <button
-                          onClick={() => setShowSetupWizard(true)}
-                          style={{ fontSize: 12, color: 'var(--accent-light)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}
-                        >
-                          Edit Configuration →
-                        </button>
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 32, alignItems: 'start' }}>
+                      {/* ── LEFT COLUMN: Configuration Cards + Live Comment Stream ── */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+                        {/* Section Header */}
+                        <div className="ds-section-header" style={{ marginBottom: -8 }}>
+                          <span>ACTIVE VOICE & PERSONA CONFIGURATION</span>
+                          <button
+                            onClick={() => navigateTo('#/setup-wizard')}
+                            style={{ fontSize: 12, color: 'var(--accent-light)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+                          >
+                            Edit Configuration →
+                          </button>
+                        </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--element-gap)' }}>
-                        {/* Identity & Niche */}
-                        <div className="ds-card">
-                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>1. Identity & Niche</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                            <div><span style={{ color: 'var(--text-muted)' }}>Business Name:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4 }}>{styleObj.business_name || apiUser?.full_name || apiUser?.username || 'N/A'}</span></div>
-                            <div><span style={{ color: 'var(--text-muted)' }}>Industry:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.industry || 'General Content Creator'}</span></div>
-                            <div>
-                              <span style={{ color: 'var(--text-muted)', display: 'block' }}>Target Audience:</span>
-                              <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.audience || 'Not specified'}</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--element-gap)' }}>
+                          {/* Identity & Niche */}
+                          <div className="ds-card">
+                            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Identity & Niche</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                              <div><span style={{ color: 'var(--text-muted)' }}>Business Name:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4 }}>{styleObj.business_name || apiUser?.full_name || apiUser?.username || 'N/A'}</span></div>
+                              <div><span style={{ color: 'var(--text-muted)' }}>Industry:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.industry || 'General Content Creator'}</span></div>
+                              <div>
+                                <span style={{ color: 'var(--text-muted)', display: 'block' }}>Target Audience:</span>
+                                <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.audience || 'Not specified'}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Voice & Persona */}
+                          <div className="ds-card">
+                            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Voice & Persona</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                              <div><span style={{ color: 'var(--text-muted)' }}>Persona:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4, textTransform: 'capitalize' }}>{styleObj.persona || 'Founder'}</span></div>
+                              <div><span style={{ color: 'var(--text-muted)' }}>Formality Level:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.formality || 3} / 5</span></div>
+                              <div>
+                                <span style={{ color: 'var(--text-muted)', display: 'block' }}>Tone Description:</span>
+                                <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.tone_description || 'Friendly, engaging, and clear.'}</p>
+                              </div>
+                              {styleObj.signature_phrases?.length > 0 && (
+                                <div style={{ paddingTop: 4 }}>
+                                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 12 }}>Signature Phrases:</span>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {styleObj.signature_phrases.map((phrase, i) => (
+                                      <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{phrase}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Voice & Persona */}
+                        {/* Knowledge Base */}
                         <div className="ds-card">
-                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>2. Voice & Persona</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                            <div><span style={{ color: 'var(--text-muted)' }}>Persona:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4, textTransform: 'capitalize' }}>{styleObj.persona || 'Founder'}</span></div>
-                            <div><span style={{ color: 'var(--text-muted)' }}>Formality Level:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.formality || 3} / 5</span></div>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Knowledge Base & FAQs</div>
+                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
+                        </div>
+
+                        {/* Safety & Guardrails */}
+                        <div className="ds-card">
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Safety & Guardrails</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
                             <div>
-                              <span style={{ color: 'var(--text-muted)', display: 'block' }}>Tone Description:</span>
-                              <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.tone_description || 'Friendly, engaging, and clear.'}</p>
-                            </div>
-                            {styleObj.signature_phrases?.length > 0 && (
-                              <div style={{ paddingTop: 4 }}>
-                                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 12 }}>Signature Phrases:</span>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                  {styleObj.signature_phrases.map((phrase, i) => (
-                                    <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{phrase}</span>
+                              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Avoid Words:</span>
+                              {styleObj.avoid_words?.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {styleObj.avoid_words.map((w, i) => (
+                                    <span key={i} className="ds-badge ds-badge-error" style={{ fontSize: 10 }}>{w}</span>
                                   ))}
                                 </div>
-                              </div>
-                            )}
+                              ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Skip Public Topics:</span>
+                              {styleObj.avoid_topics?.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {styleObj.avoid_topics.map((t, i) => (
+                                    <span key={i} className="ds-badge ds-badge-warning" style={{ fontSize: 10 }}>{t}</span>
+                                  ))}
+                                </div>
+                              ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                            </div>
+                            <div>
+                              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Redirect to DM:</span>
+                              {styleObj.dm_topics?.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {styleObj.dm_topics.map((d, i) => (
+                                    <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{d}</span>
+                                  ))}
+                                </div>
+                              ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Active Settings Row */}
+                        <div className="ds-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Reply Mode:</span>
+                            <span className="ds-badge ds-badge-purple">{styleObj.reply_mode || 'Draft'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Auto-Analyze:</span>
+                            <span className={`ds-badge ${styleObj.auto_analyze_reels !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                              {styleObj.auto_analyze_reels !== false ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Real-Time:</span>
+                            <span className={`ds-badge ${styleObj.use_realtime_data !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                              {styleObj.use_realtime_data !== false ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Comment Stream Section */}
+                        <div className="ds-card" style={{ padding: 0, overflow: 'hidden' }}>
+                          <div className="ds-tab-bar" style={{ padding: '0 var(--card-padding)' }}>
+                            <button
+                              onClick={() => setInboxSubFilter('pending')}
+                              className={`ds-tab ${inboxSubFilter === 'pending' ? 'ds-tab-active' : ''}`}
+                            >
+                              Pending Queue ({apiComments.filter(c => !c.is_processed).length})
+                            </button>
+                            <button
+                              onClick={() => setInboxSubFilter('posted')}
+                              className={`ds-tab ${inboxSubFilter === 'posted' ? 'ds-tab-active' : ''}`}
+                            >
+                              Posted History ({apiComments.filter(c => c.is_processed).length})
+                            </button>
+                          </div>
+
+                          <div style={{ padding: 'var(--card-padding)' }}>
+                            {(() => {
+                              const filtered = apiComments.filter(c => inboxSubFilter === 'pending' ? !c.is_processed : c.is_processed);
+                              if (filtered.length === 0) {
+                                return (
+                                  <div style={{ padding: '48px 0', textAlign: 'center' }}>
+                                    <div style={{
+                                      display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                                      padding: '32px 40px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-card)',
+                                      background: 'rgba(17,17,24,0.3)',
+                                    }}>
+                                      <svg style={{ width: 32, height: 32, color: 'var(--text-muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0l-3.586 3.586a2 2 0 01-2.828 0L6 13" />
+                                      </svg>
+                                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                        No {inboxSubFilter === 'pending' ? 'pending comments waiting for approval' : 'posted comments history yet'}.
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--element-gap)' }}>
+                                  {filtered.map((comment) => (
+                                    <div key={comment.id} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: 16 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>@{comment.commenter_username || 'user'}</span>
+                                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(comment.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <span className={`ds-badge ${comment.is_processed ? 'ds-badge-success' : 'ds-badge-warning'}`} style={{ fontSize: 10 }}>
+                                          {comment.is_processed ? 'Posted' : 'Pending Review'}
+                                        </span>
+                                      </div>
+
+                                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', marginBottom: 10 }}>
+                                        "{comment.text}"
+                                      </p>
+
+                                      {/* AI Reply Block */}
+                                      {comment.replies && comment.replies.length > 0 && (
+                                        <div style={{ marginBottom: 8 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                            <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)' }}>Generated AI Response:</span>
+                                            {comment.replies[0].used_web_search && (
+                                              <span style={{ fontSize: 11, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>🌐 Real-time Web Verified</span>
+                                            )}
+                                          </div>
+                                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--accent-glow)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid rgba(124,58,237,0.15)' }}>
+                                            {comment.replies[0].reply_text}
+                                          </div>
+
+                                          {!comment.is_processed && (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+                                              <button onClick={() => handleRejectReply(comment.id)} className="ds-btn-ghost-sm">
+                                                Discard
+                                              </button>
+                                              <button onClick={() => handleApproveReply(comment.id)} className="ds-btn-primary-sm" style={{ background: 'var(--success)' }}>
+                                                Post to Instagram ✓
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {!comment.replies?.length && !comment.is_processed && (
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                                          <button onClick={() => handleGenerateReply(comment.id)} className="ds-btn-primary-sm">
+                                            ✨ Generate AI Reply
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
 
-                      {/* Knowledge Base (full width) */}
-                      <div className="ds-card">
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>3. Knowledge Base & FAQs</div>
-                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
-                      </div>
-
-                      {/* Safety & Guardrails (full width) */}
-                      <div className="ds-card">
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>4. Safety & Guardrails</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-                          <div>
-                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Avoid Words:</span>
-                            {styleObj.avoid_words?.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {styleObj.avoid_words.map((w, i) => (
-                                  <span key={i} className="ds-badge ds-badge-error" style={{ fontSize: 10 }}>{w}</span>
-                                ))}
-                              </div>
-                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
-                          </div>
-                          <div>
-                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Skip Public Topics:</span>
-                            {styleObj.avoid_topics?.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {styleObj.avoid_topics.map((t, i) => (
-                                  <span key={i} className="ds-badge ds-badge-warning" style={{ fontSize: 10 }}>{t}</span>
-                                ))}
-                              </div>
-                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
-                          </div>
-                          <div>
-                            <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Redirect to DM:</span>
-                            {styleObj.dm_topics?.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {styleObj.dm_topics.map((d, i) => (
-                                  <span key={i} className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>{d}</span>
-                                ))}
-                              </div>
-                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Active Settings Row (full width) */}
-                      <div className="ds-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Reply Mode:</span>
-                          <span className="ds-badge ds-badge-purple">{styleObj.reply_mode || 'Draft'}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Auto-Analyze:</span>
-                          <span className={`ds-badge ${styleObj.auto_analyze_reels !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
-                            {styleObj.auto_analyze_reels !== false ? 'Enabled' : 'Disabled'}
+                      {/* ── RIGHT COLUMN: Live Instagram Reel Comments Dark Theme Phone Simulator ── */}
+                      <div style={{ position: 'sticky', top: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            📱 Live Instagram Comment Simulator
                           </span>
+                          <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>Dark Theme</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Real-Time:</span>
-                          <span className={`ds-badge ${styleObj.use_realtime_data !== false ? 'ds-badge-success' : 'ds-badge-muted'}`}>
-                            {styleObj.use_realtime_data !== false ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </div>
+
+                        <InstagramCommentPreview
+                          apiUser={apiUser}
+                          voiceProfile={styleObj}
+                        />
                       </div>
-                    </>
+                    </div>
                   );
                 })()}
-
-                {/* Comment Stream Section */}
-                <div className="ds-card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {/* Tab Bar (underline style) */}
-                  <div className="ds-tab-bar" style={{ padding: '0 var(--card-padding)' }}>
-                    <button
-                      onClick={() => setInboxSubFilter('pending')}
-                      className={`ds-tab ${inboxSubFilter === 'pending' ? 'ds-tab-active' : ''}`}
-                    >
-                      Pending Queue ({apiComments.filter(c => !c.is_processed).length})
-                    </button>
-                    <button
-                      onClick={() => setInboxSubFilter('posted')}
-                      className={`ds-tab ${inboxSubFilter === 'posted' ? 'ds-tab-active' : ''}`}
-                    >
-                      Posted History ({apiComments.filter(c => c.is_processed).length})
-                    </button>
-                  </div>
-
-                  {/* Comment Cards */}
-                  <div style={{ padding: 'var(--card-padding)' }}>
-                    {(() => {
-                      const filtered = apiComments.filter(c => inboxSubFilter === 'pending' ? !c.is_processed : c.is_processed);
-                      if (filtered.length === 0) {
-                        return (
-                          <div style={{ padding: '48px 0', textAlign: 'center' }}>
-                            <svg style={{ width: 32, height: 32, color: 'var(--text-muted)', margin: '0 auto 12px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0l-3.586 3.586a2 2 0 01-2.828 0L6 13" />
-                            </svg>
-                            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                              No {inboxSubFilter === 'pending' ? 'pending comments waiting for approval' : 'posted comments history yet'}.
-                            </p>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--element-gap)' }}>
-                          {filtered.map((comment) => (
-                            <div key={comment.id} style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: 16 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>@{comment.commenter_username || 'user'}</span>
-                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(comment.created_at).toLocaleString()}</span>
-                                </div>
-                                <span className={`ds-badge ${comment.is_processed ? 'ds-badge-success' : 'ds-badge-warning'}`} style={{ fontSize: 10 }}>
-                                  {comment.is_processed ? 'Posted' : 'Pending Review'}
-                                </span>
-                              </div>
-
-                              <p style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', marginBottom: 10 }}>
-                                "{comment.text}"
-                              </p>
-
-                              {/* AI Reply Block */}
-                              {comment.replies && comment.replies.length > 0 && (
-                                <div style={{ marginBottom: 8 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)' }}>Generated AI Response:</span>
-                                    {comment.replies[0].used_web_search && (
-                                      <span style={{ fontSize: 11, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>🌐 Real-time Web Verified</span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'var(--accent-glow)', padding: 12, borderRadius: 'var(--radius-button)', border: '1px solid rgba(124,58,237,0.15)' }}>
-                                    {comment.replies[0].reply_text}
-                                  </div>
-
-                                  {!comment.is_processed && (
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-                                      <button onClick={() => handleRejectReply(comment.id)} className="ds-btn-ghost-sm">
-                                        Discard
-                                      </button>
-                                      <button onClick={() => handleApproveReply(comment.id)} className="ds-btn-primary-sm" style={{ background: 'var(--success)' }}>
-                                        Post to Instagram ✓
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              {!comment.replies?.length && !comment.is_processed && (
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                                  <button onClick={() => handleGenerateReply(comment.id)} className="ds-btn-primary-sm">
-                                    ✨ Generate AI Reply
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
               </div>
             ) : (
               /* ──── AUTOMATION LIST VIEW ──── */
@@ -911,15 +1032,15 @@ export default function Dashboard({ user, onSignOut }) {
                   <p className="ds-page-subtitle">Click any automation to view settings, analytics, and pending approval queue.</p>
                 </div>
 
-                {/* AI Reply Automation Card (Active) */}
+                {/* AI Reply for Engagement Card */}
                 <div
                   onClick={() => {
                     if (apiUser && !apiUser.has_advanced_scopes) {
                       setShowScopePromptModal(true);
                     } else if (apiUser && !apiUser.reply_style) {
-                      setShowSetupWizard(true);
+                      navigateTo('#/setup-wizard');
                     } else {
-                      setSelectedAutomation('ai-reply');
+                      navigateTo('#/automations/ai-reply');
                     }
                   }}
                   className="ds-card"
@@ -933,7 +1054,7 @@ export default function Dashboard({ user, onSignOut }) {
                         </svg>
                       </div>
                       <div>
-                        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>AI Reply for Engagement</h3>
+                        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>AI Reply for Engagement</h3>
                         <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Auto-reply to comments with AI-powered contextual responses</p>
                       </div>
                     </div>
@@ -962,16 +1083,69 @@ export default function Dashboard({ user, onSignOut }) {
                   </div>
                 </div>
 
+                {/* Comment-to-DM Automation Card */}
+                <div
+                  className="ds-card"
+                  style={{ padding: 18 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(0,149,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg style={{ width: 20, height: 20, color: '#0095F6' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Comment-to-DM Automation</h3>
+                        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Auto-send private Instagram DMs with interactive buttons or direct links</p>
+                      </div>
+                    </div>
+
+                    {/* Enable / Disable Toggle Switch */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className={`ds-badge ${dmRules.length > 0 ? 'ds-badge-success' : 'ds-badge-muted'}`} style={{ fontSize: 11 }}>
+                        {dmRules.length > 0 ? '● Enabled' : 'Disabled'}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const nextState = dmRules.length === 0;
+                          showNotification(`Comment-to-DM ${nextState ? 'enabled' : 'disabled'}`);
+                        }}
+                        className={`ds-toggle ${dmRules.length > 0 ? 'ds-toggle-on' : 'ds-toggle-off'}`}
+                        style={{ width: 44, height: 24, flexShrink: 0 }}
+                        title="Toggle Comment-to-DM"
+                      >
+                        <span className="ds-toggle-knob" style={{ width: 20, height: 20 }} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Feature badges */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>🔘 2-Step Button or Direct Link</span>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>🏷️ Custom Keyword or All Comments</span>
+                    <span className="ds-badge ds-badge-purple" style={{ fontSize: 10 }}>🎬 Per-Reel Customization</span>
+                  </div>
+
+                  <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Active for configured reels
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Customize per reel on Dashboard ⚙️
+                    </span>
+                  </div>
+                </div>
+
                 {/* Coming Soon Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--element-gap)' }}>
                   {[
-                    { icon: '💬', name: 'Comment-to-DM', desc: 'Auto-send DMs when users comment specific keywords.' },
                     { icon: '📸', name: 'Story Mention Reply', desc: 'Auto-thank users who mention you in their stories.' },
                   ].map((item) => (
-                    <div key={item.name} className="ds-card" style={{ opacity: 0.6, position: 'relative' }}>
+                    <div key={item.name} className="ds-card" style={{ opacity: 0.5, position: 'relative', borderStyle: 'dashed', borderColor: 'var(--border)' }}>
                       <span className="ds-badge ds-badge-muted" style={{ position: 'absolute', top: 16, right: 16, fontSize: 10 }}>Coming Soon</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(100,116,139,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, border: '1px solid rgba(100,116,139,0.12)' }}>
                           {item.icon}
                         </div>
                         <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>{item.name}</h3>
@@ -986,115 +1160,295 @@ export default function Dashboard({ user, onSignOut }) {
         )}
 
         {/* ═══════════════ TAB 3: SETTINGS ═══════════════ */}
-        {activeTab === 'settings' && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
-            <div>
-              <h1 className="ds-page-title">Settings</h1>
-              <p className="ds-page-subtitle">Manage your Instagram integration and account preferences.</p>
-            </div>
+        {activeTab === 'settings' && (() => {
+          let styleObj = {};
+          try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
 
-            {/* Instagram Integration Card */}
-            <div className="ds-card">
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Instagram Business Integration</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Meta Graph API access configuration</p>
+          return (
+            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--section-gap)' }}>
+              <div>
+                <h1 className="ds-page-title">Settings</h1>
+                <p className="ds-page-subtitle">Manage your Instagram integration, AI voice profile, and automation preferences.</p>
               </div>
 
-              <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
-                {/* Linked Account Row */}
-                <div className="ds-row">
-                  <span className="ds-row-label">Linked Account</span>
-                  <span className="ds-row-value">
-                    {apiUser?.username ? `@${apiUser.username}` : 'Not Connected'}
-                  </span>
-                </div>
-
-                {/* AI Reply Tone Row */}
-                <div className="ds-row">
-                  <span className="ds-row-label">AI Reply Tone</span>
-                  <select
-                    value={apiUser?.reply_tone || 'friendly'}
-                    onChange={(e) => handleUpdateTone(e.target.value)}
-                    className="ds-select"
-                    style={{ padding: '6px 10px', fontSize: 13 }}
-                  >
-                    <option value="friendly">Friendly & Casual</option>
-                    <option value="professional">Professional</option>
-                    <option value="hype">Hype & Energetic</option>
-                    <option value="witty">Witty / Sarcastic</option>
-                  </select>
-                </div>
-
-                {/* Auto-Reply Toggle Row */}
-                <div className="ds-row">
-                  <span className="ds-row-label">Auto-Reply Comments</span>
-                  <button
-                    onClick={toggleAutoReplySetting}
-                    className={`ds-toggle ${apiUser?.auto_reply_enabled ? 'ds-toggle-on' : 'ds-toggle-off'}`}
-                  >
-                    <span className="ds-toggle-knob" />
-                  </button>
-                </div>
-
-                {/* Connection Handshake Row */}
-                <div className="ds-row">
-                  <span className="ds-row-label">Connection Handshake</span>
-                  {isInstagramConnected ? (
-                    <span className="ds-badge ds-badge-success">Handshake Active</span>
-                  ) : (
-                    <button onClick={handleConnectInstagram} className="ds-btn-primary-sm">
-                      Connect Instagram
+              {/* 1. Instagram Business Integration */}
+              <div className="ds-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Instagram Business Account</h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Meta Graph API connection & reel sync</p>
+                  </div>
+                  {isInstagramConnected && (
+                    <button onClick={handleSyncReels} disabled={syncing} className="ds-btn-ghost-sm" style={{ gap: 6 }}>
+                      {syncing ? <IconSync /> : <IconGlobe />}
+                      <span>{syncing ? 'Syncing...' : 'Sync Reels'}</span>
                     </button>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* Notification Preferences Card */}
-            <div className="ds-card">
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Notification Preferences</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Configure how you receive alerts</p>
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
+                  <div className="ds-row">
+                    <span className="ds-row-label">Linked Account</span>
+                    <span className="ds-row-value">
+                      {apiUser?.username ? `@${apiUser.username}` : 'Not Connected'}
+                    </span>
+                  </div>
+                  <div className="ds-row">
+                    <span className="ds-row-label">Full Name</span>
+                    <span className="ds-row-value">{apiUser?.full_name || '—'}</span>
+                  </div>
+                  <div className="ds-row">
+                    <span className="ds-row-label">Followers / Posts</span>
+                    <span className="ds-row-value">{apiUser?.followers_count ?? 0} followers · {apiUser?.media_count ?? apiReels.length} posts</span>
+                  </div>
+                  <div className="ds-row">
+                    <span className="ds-row-label">Connection Status</span>
+                    {isInstagramConnected ? (
+                      <span className="ds-badge ds-badge-success">● Connected & Active</span>
+                    ) : (
+                      <button onClick={handleConnectInstagram} className="ds-btn-primary-sm">
+                        Connect Instagram
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
-                <div className="ds-row">
-                  <span className="ds-row-label">New comment alerts</span>
-                  <button className="ds-toggle ds-toggle-on">
-                    <span className="ds-toggle-knob" />
-                  </button>
-                </div>
-                <div className="ds-row">
-                  <span className="ds-row-label">AI reply failures</span>
-                  <button className="ds-toggle ds-toggle-on">
-                    <span className="ds-toggle-knob" />
-                  </button>
-                </div>
-                <div className="ds-row">
-                  <span className="ds-row-label">Weekly analytics digest</span>
-                  <button className="ds-toggle ds-toggle-off">
-                    <span className="ds-toggle-knob" />
-                  </button>
-                </div>
-              </div>
-            </div>
 
-            {/* Danger Zone Card */}
-            <div className="ds-danger-card">
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--error)' }}>Danger Zone</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Irreversible actions for your account</p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Disconnect Instagram Account</span>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Remove your linked Instagram business account. You can reconnect anytime.</p>
+              {/* 2. AI Reply Engine & Autopilot Rules (Synced with My Automations) */}
+              <div className="ds-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>AI Reply Engine & Execution Rules</h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Configure how your AI replies to Instagram comments</p>
+                  </div>
+                  <span className={`ds-badge ${apiUser?.auto_reply_enabled ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                    {apiUser?.auto_reply_enabled ? '● Active' : '○ Paused'}
+                  </span>
                 </div>
-                <button className="ds-btn-danger">
-                  Disconnect
-                </button>
+
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '4px 16px' }}>
+                  {/* Auto-Reply Master Switch */}
+                  <div className="ds-row">
+                    <div>
+                      <span className="ds-row-label" style={{ fontWeight: 600 }}>Auto-Reply to Comments</span>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Turn the AI comment reply pipeline ON or OFF</p>
+                    </div>
+                    <button
+                      onClick={toggleAutoReplySetting}
+                      className={`ds-toggle ${apiUser?.auto_reply_enabled ? 'ds-toggle-on' : 'ds-toggle-off'}`}
+                    >
+                      <span className="ds-toggle-knob" />
+                    </button>
+                  </div>
+
+                  {/* Reply Mode (Draft vs Auto) */}
+                  <div className="ds-row">
+                    <div>
+                      <span className="ds-row-label" style={{ fontWeight: 600 }}>Default Reply Mode</span>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Draft mode requires approval; Auto mode sends replies immediately</p>
+                    </div>
+                    <select
+                      value={styleObj.reply_mode || (apiUser?.auto_reply_enabled ? 'auto' : 'draft')}
+                      onChange={(e) => handleUpdateVoiceConfig('reply_mode', e.target.value)}
+                      className="ds-select"
+                      style={{ padding: '6px 12px', fontSize: 13 }}
+                    >
+                      <option value="draft">Draft Mode (Manual Review)</option>
+                      <option value="auto">Auto Mode (Instant Send)</option>
+                    </select>
+                  </div>
+
+                  {/* Auto-Analyze New Reels */}
+                  <div className="ds-row">
+                    <div>
+                      <span className="ds-row-label" style={{ fontWeight: 600 }}>Auto-Analyze New Posts</span>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Analyze reel video & caption when published to prepare context</p>
+                    </div>
+                    <button
+                      onClick={() => handleUpdateVoiceConfig('auto_analyze_reels', styleObj.auto_analyze_reels === false)}
+                      className={`ds-toggle ${styleObj.auto_analyze_reels !== false ? 'ds-toggle-on' : 'ds-toggle-off'}`}
+                    >
+                      <span className="ds-toggle-knob" />
+                    </button>
+                  </div>
+
+                  {/* Realtime Web Search */}
+                  <div className="ds-row">
+                    <div>
+                      <span className="ds-row-label" style={{ fontWeight: 600 }}>Live Web & Market Search</span>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Use Grok & Tavily to fetch live data when comments ask about prices or news</p>
+                    </div>
+                    <button
+                      onClick={() => handleUpdateVoiceConfig('use_realtime_data', !styleObj.use_realtime_data)}
+                      className={`ds-toggle ${styleObj.use_realtime_data ? 'ds-toggle-on' : 'ds-toggle-off'}`}
+                    >
+                      <span className="ds-toggle-knob" />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </motion.div>
+
+              {/* 3. AI Voice DNA & Persona Configuration */}
+              <div className="ds-card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>AI Voice DNA & Persona</h3>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Synchronized with Setup Wizard and My Automations</p>
+                  </div>
+                  <button
+                    onClick={() => navigateTo('#/setup-wizard')}
+                    className="ds-btn-primary-sm"
+                  >
+                    Open Voice Wizard →
+                  </button>
+                </div>
+
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Persona Selector */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                      AI Persona / Tone Preset
+                    </label>
+                    <select
+                      value={styleObj.persona || apiUser?.reply_tone || 'founder'}
+                      onChange={(e) => handleUpdateVoiceConfig('persona', e.target.value)}
+                      className="ds-select"
+                      style={{ width: '100%', padding: '8px 12px', fontSize: 14 }}
+                    >
+                      <option value="founder">Founder / Brand Creator</option>
+                      <option value="casual_friend">Casual Friend</option>
+                      <option value="helpful_expert">Helpful Expert</option>
+                      <option value="professional">Professional & Formal</option>
+                      <option value="hype_friend">Hype & Energetic</option>
+                      <option value="witty_sarcastic">Witty & Sarcastic</option>
+                    </select>
+                  </div>
+
+                  {/* Formality Level */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Formality Level: {styleObj.formality || 3} / 5
+                      </label>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {Number(styleObj.formality || 3) <= 2 ? 'Casual' : Number(styleObj.formality || 3) === 3 ? 'Balanced' : 'Strictly Formal'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      step="1"
+                      value={styleObj.formality || 3}
+                      onChange={(e) => handleUpdateVoiceConfig('formality', parseInt(e.target.value))}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  {/* Business Name & Industry */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                        Business / Brand Name
+                      </label>
+                      <input
+                        type="text"
+                        value={styleObj.business_name || apiUser?.full_name || apiUser?.username || ''}
+                        onChange={(e) => handleUpdateVoiceConfig('business_name', e.target.value)}
+                        placeholder="e.g. My Brand"
+                        className="ds-input"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                        Industry / Niche
+                      </label>
+                      <input
+                        type="text"
+                        value={styleObj.industry || ''}
+                        onChange={(e) => handleUpdateVoiceConfig('industry', e.target.value)}
+                        placeholder="e.g. E-Commerce, Fitness, Tech"
+                        className="ds-input"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tone Description */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                      Custom Tone Description
+                    </label>
+                    <input
+                      type="text"
+                      value={styleObj.tone_description || ''}
+                      onChange={(e) => handleUpdateVoiceConfig('tone_description', e.target.value)}
+                      placeholder="e.g. Friendly, encouraging, short, concise"
+                      className="ds-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Safety & Guardrails */}
+              <div className="ds-card">
+                <div style={{ marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Content Safety & Guardrails</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>Protect your brand reputation and handle sensitive topics</p>
+                </div>
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                      Avoided Words & Phrases
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(styleObj.avoid_words && styleObj.avoid_words.length > 0 ? styleObj.avoid_words : ['cheap', 'guaranteed', 'discount', 'free stuff']).map((word, i) => (
+                        <span key={i} className="ds-badge ds-badge-error" style={{ fontSize: 12 }}>
+                          🚫 {word}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+                      Avoided Topics
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(styleObj.avoid_topics && styleObj.avoid_topics.length > 0 ? styleObj.avoid_topics : ['politics', 'crypto', 'financial advice']).map((topic, i) => (
+                        <span key={i} className="ds-badge ds-badge-warning" style={{ fontSize: 12 }}>
+                          ⚠️ {topic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Danger Zone */}
+              <div className="ds-danger-card">
+                <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <svg style={{ width: 18, height: 18, color: 'var(--error)', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--error)' }}>Danger Zone</h3>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Account management actions</p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'rgba(239,68,68,0.03)', borderRadius: 'var(--radius-button)', border: '1px solid rgba(239,68,68,0.1)' }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Sign Out & Clear Session</span>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Log out from this browser session.</p>
+                  </div>
+                  <button onClick={onSignOut} className="ds-btn-danger">
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+          </>
         )}
         </div>
       </main>
@@ -1126,8 +1480,40 @@ export default function Dashboard({ user, onSignOut }) {
                 </svg>
               </button>
 
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent-light)', marginBottom: 8 }}>
-                Gemini Analysis Summary
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 40, marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="ds-badge ds-badge-purple" style={{ fontSize: 11, padding: '4px 10px' }}>
+                    🤖 Gemini Multimodal AI
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                    Reel Summary
+                  </span>
+                </div>
+
+                {/* Big, Visible, Prominent Analyze / Re-analyze Button */}
+                <button
+                  onClick={(e) => handleAnalyzeReel(e, selectedReel.id)}
+                  disabled={analyzingReels[selectedReel.id]}
+                  className={selectedReel.summary || selectedReel.is_analyzed ? "ds-btn-ghost" : "ds-btn-primary"}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    padding: '8px 20px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderRadius: 24,
+                    border: selectedReel.summary || selectedReel.is_analyzed ? '1.5px solid var(--accent)' : 'none',
+                    background: selectedReel.summary || selectedReel.is_analyzed ? 'rgba(124,58,237,0.12)' : undefined,
+                    boxShadow: '0 0 16px rgba(124,58,237,0.35)',
+                    cursor: analyzingReels[selectedReel.id] ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {analyzingReels[selectedReel.id] 
+                    ? (selectedReel.summary || selectedReel.is_analyzed ? '🔄 Re-analyzing Reel…' : '✨ Analyzing Reel…')
+                    : (selectedReel.summary || selectedReel.is_analyzed ? '🔄 Re-analyze Reel' : '✨ Analyze Reel')
+                  }
+                </button>
               </div>
 
               <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>{selectedReel.caption || 'No caption'}</h2>
@@ -1144,16 +1530,16 @@ export default function Dashboard({ user, onSignOut }) {
 
                     {selectedReel.summary.analysis_model !== 'failed' && (
                       <>
-                        <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                        <div style={{ background: 'rgba(17,24,39,0.5)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', backdropFilter: 'blur(8px)' }}>
                           <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Main Topic</div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)', marginTop: 6 }}>
                             {selectedReel.summary.ai_summary?.topic || 'Not extracted'}
                           </div>
                         </div>
 
-                        <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                        <div style={{ background: 'rgba(17,24,39,0.5)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', backdropFilter: 'blur(8px)' }}>
                           <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Key Points</div>
-                          <ul style={{ listStyleType: 'decimal', paddingLeft: 20, fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>
+                          <ul style={{ listStyleType: 'disc', paddingLeft: 20, fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6, marker: 'var(--accent)' }}>
                             {selectedReel.summary.key_points && selectedReel.summary.key_points.length > 0 ? (
                               selectedReel.summary.key_points.map((pt, idx) => <li key={idx} style={{ marginBottom: 6 }}>{pt}</li>)
                             ) : (
@@ -1163,13 +1549,13 @@ export default function Dashboard({ user, onSignOut }) {
                         </div>
 
                         {selectedReel.summary.faq && selectedReel.summary.faq.length > 0 && (
-                          <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                          <div style={{ background: 'rgba(17,24,39,0.5)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', backdropFilter: 'blur(8px)' }}>
                             <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Anticipated FAQs</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                               {selectedReel.summary.faq.map((item, idx) => (
-                                <div key={idx} style={{ fontSize: 13, borderLeft: '2px solid var(--accent)', paddingLeft: 12, lineHeight: 1.5 }}>
+                                <div key={idx} style={{ fontSize: 13, padding: '10px 14px', background: 'rgba(59,130,246,0.05)', borderRadius: 6, lineHeight: 1.5 }}>
                                   <p style={{ fontWeight: 600, color: 'var(--accent-light)' }}>Q: {item.question || item.q}</p>
-                                  <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>A: {item.answer || item.a}</p>
+                                  <p style={{ color: 'var(--text-primary)', marginTop: 4 }}>A: {item.answer || item.a}</p>
                                 </div>
                               ))}
                             </div>
@@ -1177,7 +1563,7 @@ export default function Dashboard({ user, onSignOut }) {
                         )}
 
                         {selectedReel.summary.ai_summary?.realtime_context && (
-                          <div style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)' }}>
+                          <div style={{ background: 'rgba(17,24,39,0.5)', padding: 16, borderRadius: 'var(--radius-button)', border: '1px solid var(--border)', backdropFilter: 'blur(8px)' }}>
                             <div style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
                               <IconGlobe /> Real-time search context
                             </div>
@@ -1212,7 +1598,7 @@ export default function Dashboard({ user, onSignOut }) {
             <AutomationSetup
               apiUser={apiUser}
               onComplete={() => {
-                setShowSetupWizard(false);
+                navigateTo(activeTab === 'my-automations' ? '#/automations' : '#/dashboard');
                 loadDashboardData();
               }}
               onConnect={handleConnectInstagram}
@@ -1222,7 +1608,7 @@ export default function Dashboard({ user, onSignOut }) {
         )}
       </AnimatePresence>
 
-      {/* ADVANCED SCOPE PROMPT MODAL */}
+      {/* STEP-UP SCOPE PROMPT MODAL */}
       <AnimatePresence>
         {showScopePromptModal && (
           <motion.div
@@ -1232,8 +1618,8 @@ export default function Dashboard({ user, onSignOut }) {
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(10,10,15,0.85)',
-              backdropFilter: 'blur(12px)',
+              background: 'rgba(0, 0, 0, 0.45)',
+              backdropFilter: 'blur(4px)',
               zIndex: 70,
               display: 'flex',
               alignItems: 'center',
@@ -1249,20 +1635,21 @@ export default function Dashboard({ user, onSignOut }) {
               onClick={(e) => e.stopPropagation()}
               className="ds-card"
               style={{
-                maxWidth: 460,
+                maxWidth: 440,
                 width: '100%',
                 textAlign: 'center',
                 padding: '32px 24px',
-                border: '1px solid rgba(124,58,237,0.3)',
-                background: 'var(--bg-card)'
+                border: '1px solid var(--border)',
+                background: '#FFFFFF',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.12)'
               }}
             >
-              <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
-              <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-                Advanced Permissions Required
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🔐</div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                Authorize Comment Management
               </h2>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 28 }}>
-                AI auto-replies require comment management permissions to draft and publish replies under your posts. Reconnect your Instagram account via Meta to grant these permissions.
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 24 }}>
+                To allow Pilotly to publish AI replies under your Instagram posts, Meta requires you to grant comment management permissions (<code>instagram_business_manage_comments</code>).
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1272,14 +1659,14 @@ export default function Dashboard({ user, onSignOut }) {
                     handleConnectAdvancedInstagram();
                   }}
                   className="ds-btn-primary"
-                  style={{ width: '100%', justifyContent: 'center', gap: 8 }}
+                  style={{ width: '100%', justifyContent: 'center', gap: 8, padding: '10px 16px' }}
                 >
-                  Authorize Comment Management
+                  Authorize Comment Management via Meta →
                 </button>
                 <button
                   onClick={() => setShowScopePromptModal(false)}
                   className="ds-btn-ghost"
-                  style={{ width: '100%', justifyContent: 'center' }}
+                  style={{ width: '100%', justifyContent: 'center', padding: '10px 16px' }}
                 >
                   Cancel
                 </button>

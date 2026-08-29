@@ -79,6 +79,10 @@ async def update_settings(
         settings_data=settings_update,
     )
 
+    # Invalidate Redis cache for user profile
+    from app.core.cache import delete_cached
+    await delete_cached(f"user:{user_id}:profile")
+
     logger.info(
         "Settings updated for user_id=%s: auto_reply=%s, tone=%s",
         user_id,

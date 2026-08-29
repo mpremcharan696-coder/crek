@@ -102,8 +102,9 @@ class AIAgentService:
         self.gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.gemini_model = "gemini-2.5-flash"
 
-        # Groq config
+        # Groq config (Primary + Secondary failover key)
         self.groq_api_key = settings.GROQ_API_KEY
+        self.groq_api_key_secondary = getattr(settings, "GROQ_API_KEY_SECONDARY", "")
         self.groq_base_url = "https://api.groq.com/openai/v1"
         self.groq_model = "qwen/qwen3.6-27b"
 
@@ -317,29 +318,60 @@ class AIAgentService:
 
 
     # ------------------------------------------------------------------
-    # Groq Chat Completion (direct httpx call)
+    # Groq Chat Completion (direct httpx call with dual-key fallback)
     # ------------------------------------------------------------------
 
     async def _call_groq(self, messages: list[dict[str, str]]) -> str:
-        """Send a chat completion request to Groq's OpenAI-compatible API."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{self.groq_base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.groq_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.groq_model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            choices = data.get("choices", [])
-            if choices:
-                return choices[0].get("message", {}).get("content", "")
+        """Send a chat completion request to Groq's OpenAI-compatible API.
+
+        Features dual-key automatic failover: If the primary key encounters 429
+        (Rate Limited) or connection failure, it immediately retries with the
+        secondary Groq API key (if provided).
+        """
+        keys_to_try = [k for k in [self.groq_api_key, self.groq_api_key_secondary] if k and "placeholder" not in k]
+        if not keys_to_try:
+            logger.warning("No valid GROQ_API_KEY configured.")
+            return ""
+
+        last_error = None
+        for i, api_key in enumerate(keys_to_try):
+            key_label = "Primary" if i == 0 else f"Secondary (Key #{i+1})"
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{self.groq_base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": self.groq_model,
+                            "messages": messages,
+                            "temperature": 0.3,
+                        },
+                    )
+                    
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        choices = data.get("choices", [])
+                        if choices:
+                            return choices[0].get("message", {}).get("content", "")
+                        return ""
+                    
+                    # If rate limited (429) or server error (5xx), log warning and attempt failover key
+                    logger.warning(
+                        "Groq %s key returned status %s: %s",
+                        key_label,
+                        resp.status_code,
+                        resp.text[:120]
+                    )
+                    last_error = f"HTTP {resp.status_code}: {resp.text[:120]}"
+
+            except Exception as exc:
+                logger.warning("Groq %s key call failed: %s", key_label, exc)
+                last_error = str(exc)
+
+        logger.error("All configured Groq API keys failed. Last error: %s", last_error)
         return ""
 
 
@@ -546,7 +578,37 @@ RULES:
                     creator_style=mode_prompt,
                 )
 
-            reel_context_str = json.dumps(reel_summary, indent=2, ensure_ascii=False)
+            # Separate reel-specific custom additions from general summary
+            summary_copy = dict(reel_summary) if isinstance(reel_summary, dict) else {}
+            custom_reel_instructions = summary_copy.pop("reel_custom_instructions", None)
+            reel_knowledge = summary_copy.pop("reel_reference_knowledge", None)
+            live_api_data = summary_copy.pop("live_api_data", None)
+
+            reel_context_str = json.dumps(summary_copy, indent=2, ensure_ascii=False)
+
+            user_content_parts = [f"[REEL CONTEXT]\n{reel_context_str}\n"]
+
+            if custom_reel_instructions:
+                user_content_parts.append(
+                    f"[REEL-SPECIFIC CREATOR INSTRUCTIONS]\n{custom_reel_instructions}\n"
+                    f"(CRITICAL: You MUST strictly follow these video-specific guidelines when replying.)\n"
+                )
+
+            if reel_knowledge:
+                user_content_parts.append(
+                    f"[ATTACHED REFERENCE MATERIAL / KNOWLEDGE BASE]\n{reel_knowledge}\n"
+                    f"(Use this verified reference knowledge to answer viewer questions accurately.)\n"
+                )
+
+            if live_api_data:
+                api_str = json.dumps(live_api_data, indent=2) if isinstance(live_api_data, (dict, list)) else str(live_api_data)
+                user_content_parts.append(
+                    f"[LIVE EXTERNAL API DATA FOR THIS REEL]\n{api_str}\n"
+                    f"(Real-time data fetched from creator API — use this for live status, pricing, or inventory.)\n"
+                )
+
+            user_content_parts.append(f"Viewer comment: \"{comment}\"\n\nReply as {creator_name}.")
+            final_user_prompt = "\n".join(user_content_parts)
 
             messages: list[dict[str, str]] = [
                 {"role": "system", "content": system_prompt},
@@ -561,11 +623,7 @@ RULES:
 
             messages.append({
                 "role": "user",
-                "content": (
-                    f"[REEL CONTEXT]\n{reel_context_str}\n\n"
-                    f"Viewer comment: \"{comment}\"\n\n"
-                    f"Reply as {creator_name}."
-                ),
+                "content": final_user_prompt,
             })
 
             # Step 1: Ask Groq (Qwen) to reply or request real-time data

@@ -212,7 +212,11 @@ class AuthService:
                 await self.session.flush()
                 logger.info("Updated existing user id=%s with active instagram_user_id=%s", user.id, ig_user_id)
 
-            # Step 5 – encrypt & store token
+            # Step 5 – query granted permissions from Meta
+            granted_scopes = await self._fetch_granted_permissions(long_lived_token)
+            logger.info("Granted Meta permissions for user id=%s: %s", user.id, granted_scopes)
+
+            # Step 6 – encrypt & store token
             encrypted = encrypt_token(long_lived_token, settings.ENCRYPTION_KEY)
             token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
@@ -231,6 +235,7 @@ class AuthService:
                     .where(UserToken.id == existing_token.id)
                     .values(
                         encrypted_access_token=encrypted,
+                        scopes=granted_scopes,
                         expires_at=token_expires_at,
                         token_type="long_lived",
                     )
@@ -240,14 +245,14 @@ class AuthService:
                     user_id=user.id,
                     encrypted_access_token=encrypted,
                     token_type="long_lived",
-                    scopes=["instagram_business_basic", "instagram_business_manage_comments"],
+                    scopes=granted_scopes,
                     expires_at=token_expires_at,
                 )
                 self.session.add(new_token)
 
             await self.session.flush()
 
-            # Step 6 – JWT session
+            # Step 7 – JWT session
             jwt_token = self.create_session_jwt(user.id)
 
             await self.session.commit()
@@ -474,4 +479,22 @@ class AuthService:
         )
         response.raise_for_status()
         return response.json()
+
+    async def _fetch_granted_permissions(self, token: str) -> list[str]:
+        """Query Meta permissions endpoint to determine granted scopes."""
+        try:
+            url = f"https://graph.instagram.com/{settings.META_GRAPH_API_VERSION}/me/permissions"
+            resp = await self.http_client.get(url, params={"access_token": token})
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                granted = [
+                    item.get("permission")
+                    for item in data
+                    if item.get("status") == "granted"
+                ]
+                if granted:
+                    return granted
+        except Exception as exc:
+            logger.warning("Could not query Meta /me/permissions: %s", exc)
+        return ["instagram_business_basic"]
 

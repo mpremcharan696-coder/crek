@@ -1,55 +1,60 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════
-   PILOTLY DESIGN SYSTEM — CSS VARIABLES
+   PILOTLY DESIGN SYSTEM — INSTAGRAM LIGHT THEME
+   White background, black text, blue accents
    ═══════════════════════════════════════════════ */
 :root {
   /* ── Backgrounds ── */
-  --bg-primary: #0A0A0F;
-  --bg-secondary: #111118;
-  --bg-card: #16161F;
-  --bg-hover: #1C1C28;
-  --bg-sidebar: #0D0D14;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F5F5F5;
+  --bg-sidebar: #FFFFFF;
+  --bg-overlay: rgba(0, 0, 0, 0.5);
 
   /* ── Borders ── */
-  --border: #2A2A3A;
-  --border-hover: rgba(124, 58, 237, 0.25);
+  --border: #DBDBDB;
+  --border-hover: #B3B3B3;
+  --border-light: #EFEFEF;
 
-  /* ── Accent (Purple) ── */
-  --accent: #7C3AED;
-  --accent-light: #A78BFA;
-  --accent-glow: rgba(124, 58, 237, 0.15);
-  --accent-hover: #8B5CF6;
+  /* ── Accent (Instagram Blue) ── */
+  --accent: #0095F6;
+  --accent-light: #1877F2;
+  --accent-glow: rgba(0, 149, 246, 0.08);
+  --accent-hover: #0074CC;
 
   /* ── Text ── */
-  --text-primary: #FFFFFF;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text-primary: #000000;
+  --text-secondary: #262626;
+  --text-muted: #8E8E8E;
+  --text-link: #00376B;
 
   /* ── Semantic ── */
-  --success: #10B981;
-  --warning: #F59E0B;
-  --error: #EF4444;
+  --success: #58C322;
+  --warning: #ED6103;
+  --error: #ED4956;
 
   /* ── Spacing ── */
-  --card-padding: 20px;
+  --card-padding: 16px;
   --section-gap: 24px;
   --element-gap: 12px;
 
   /* ── Radii ── */
-  --radius-card: 12px;
+  --radius-card: 8px;
   --radius-button: 8px;
-  --radius-badge: 6px;
+  --radius-badge: 4px;
 
   /* ── Sidebar ── */
-  --sidebar-width: 240px;
+  --sidebar-width: 72px;
+  --sidebar-width-expanded: 244px;
 }
 
 @theme {
-  --color-brand: #7C3AED;
-  --color-brand-light: #A78BFA;
-  --color-brand-dark: #5B21B6;
-  --font-family-sans: 'Inter', sans-serif;
+  --color-brand: #0095F6;
+  --color-brand-light: #1877F2;
+  --color-brand-dark: #0074CC;
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ═══════════════════════════════════════════════
@@ -66,19 +71,22 @@ html {
 }
 
 body {
-  font-family: 'Inter', sans-serif;
-  background-color: var(--bg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-secondary);
   color: var(--text-primary);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════════════
-   BROWSER SURFACE THEMING
+   BROWSER SURFACES
    ═══════════════════════════════════════════════ */
 ::selection {
-  background-color: var(--accent-glow);
+  background-color: rgba(0, 149, 246, 0.2);
   color: var(--text-primary);
 }
 
@@ -87,76 +95,212 @@ body {
   outline-offset: 2px;
 }
 
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 input, textarea, select {
   caret-color: var(--accent);
 }
 
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ═══════════════════════════════════════════════
-   CUSTOM SCROLLBAR
+   SCROLLBAR — thin and subtle
    ═══════════════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 /* ═══════════════════════════════════════════════
-   ANIMATION KEYFRAMES
+   RANGE SLIDER
+   ═══════════════════════════════════════════════ */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(0,149,246,0.15), 0 1px 3px rgba(0,0,0,0.2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS
    ═══════════════════════════════════════════════ */
 @keyframes typingBounce {
   0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-5px); }
+  30% { transform: translateY(-4px); }
 }
-
 .typing-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: var(--accent);
+  background-color: var(--text-muted);
   animation: typingBounce 1.4s infinite ease-in-out;
 }
 .typing-dot:nth-child(1) { animation-delay: 0s; }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in-up {
-  animation: fadeInUp 0.5s ease-out forwards;
-  opacity: 0;
+@keyframes loadingBar {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(1); transform-origin: left; }
+  50.01% { transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
-}
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
-  50% { box-shadow: 0 0 16px 4px var(--accent-glow); }
+@keyframes subtlePulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: CARD
+   REDUCED MOTION
+   ═══════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR — Instagram-style collapsible
+   ═══════════════════════════════════════════════ */
+.ig-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+.ig-sidebar:hover {
+  width: var(--sidebar-width-expanded);
+}
+
+.ig-sidebar-logo {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 10px;
+  margin-bottom: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ig-sidebar-logo-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.ig-sidebar-logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-left: 16px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  letter-spacing: -0.01em;
+}
+.ig-sidebar:hover .ig-sidebar-logo-text {
+  opacity: 1;
+}
+
+.ig-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ig-nav-item:hover {
+  background: var(--bg-hover);
+}
+.ig-nav-item svg {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: var(--text-primary);
+  stroke-width: 1.5;
+}
+.ig-nav-item-active svg {
+  stroke-width: 2.5;
+}
+
+.ig-nav-label {
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.ig-sidebar:hover .ig-nav-label {
+  opacity: 1;
+}
+.ig-nav-item-active .ig-nav-label {
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════
+   CARD
    ═══════════════════════════════════════════════ */
 .ds-card {
   background: var(--bg-card);
@@ -165,12 +309,9 @@ input, textarea, select {
   padding: var(--card-padding);
   transition: border-color 0.2s ease;
 }
-.ds-card:hover {
-  border-color: var(--border-hover);
-}
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: STAT CARD
+   STAT CARD
    ═══════════════════════════════════════════════ */
 .ds-stat-card {
   background: var(--bg-card);
@@ -180,9 +321,7 @@ input, textarea, select {
 }
 .ds-stat-card .ds-stat-label {
   font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 600;
   color: var(--text-muted);
 }
 .ds-stat-card .ds-stat-number {
@@ -191,6 +330,7 @@ input, textarea, select {
   color: var(--text-primary);
   line-height: 1.2;
   margin-top: 4px;
+  letter-spacing: -0.02em;
 }
 .ds-stat-card .ds-stat-sub {
   font-size: 12px;
@@ -199,30 +339,30 @@ input, textarea, select {
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: SECTION HEADER
+   SECTION HEADER
    ═══════════════════════════════════════════════ */
 .ds-section-header {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: PRIMARY BUTTON
+   PRIMARY BUTTON — Instagram blue
    ═══════════════════════════════════════════════ */
 .ds-btn-primary {
   background: var(--accent);
-  color: var(--text-primary);
+  color: #FFFFFF;
   font-size: 14px;
-  font-weight: 500;
-  padding: 10px 20px;
+  font-weight: 600;
+  padding: 8px 20px;
   border-radius: var(--radius-button);
   border: none;
   cursor: pointer;
@@ -230,25 +370,25 @@ input, textarea, select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 .ds-btn-primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
+}
+.ds-btn-primary:active {
+  transform: scale(0.98);
 }
 .ds-btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
-/* ── Small primary button ── */
 .ds-btn-primary-sm {
   background: var(--accent);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 14px;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 16px;
   border-radius: var(--radius-button);
   border: none;
   cursor: pointer;
@@ -259,40 +399,37 @@ input, textarea, select {
 }
 .ds-btn-primary-sm:hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 16px rgba(124, 58, 237, 0.35);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: GHOST BUTTON
+   GHOST BUTTON
    ═══════════════════════════════════════════════ */
 .ds-btn-ghost {
   background: transparent;
   border: 1px solid var(--border);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 14px;
-  font-weight: 500;
-  padding: 10px 20px;
+  font-weight: 600;
+  padding: 8px 20px;
   border-radius: var(--radius-button);
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 .ds-btn-ghost:hover {
-  border-color: var(--accent);
-  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
-/* ── Small ghost button ── */
 .ds-btn-ghost-sm {
   background: transparent;
   border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 16px;
   border-radius: var(--radius-button);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -301,108 +438,54 @@ input, textarea, select {
   gap: 6px;
 }
 .ds-btn-ghost-sm:hover {
-  border-color: var(--accent);
-  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: BADGES
+   BADGES
    ═══════════════════════════════════════════════ */
 .ds-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 999px;
-  border: 1px solid;
+  border-radius: 4px;
+  border: none;
   white-space: nowrap;
 }
-
 .ds-badge-success {
-  background: rgba(16, 185, 129, 0.08);
+  background: rgba(88, 195, 34, 0.1);
   color: var(--success);
-  border-color: rgba(16, 185, 129, 0.19);
 }
-
 .ds-badge-purple {
-  background: rgba(124, 58, 237, 0.08);
-  color: var(--accent-light);
-  border-color: rgba(124, 58, 237, 0.19);
+  background: rgba(0, 149, 246, 0.08);
+  color: var(--accent);
 }
-
 .ds-badge-warning {
-  background: rgba(245, 158, 11, 0.08);
+  background: rgba(237, 97, 3, 0.08);
   color: var(--warning);
-  border-color: rgba(245, 158, 11, 0.19);
 }
-
 .ds-badge-error {
-  background: rgba(239, 68, 68, 0.08);
+  background: rgba(237, 73, 86, 0.08);
   color: var(--error);
-  border-color: rgba(239, 68, 68, 0.19);
 }
-
 .ds-badge-muted {
-  background: rgba(100, 116, 139, 0.1);
+  background: rgba(142, 142, 142, 0.08);
   color: var(--text-muted);
-  border-color: rgba(100, 116, 139, 0.2);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: SIDEBAR
-   ═══════════════════════════════════════════════ */
-.ds-sidebar {
-  width: var(--sidebar-width);
-  background: var(--bg-sidebar);
-  border-right: 1px solid var(--border);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  flex-shrink: 0;
-  z-index: 30;
-}
-
-.ds-nav-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  text-align: left;
-}
-.ds-nav-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-secondary);
-}
-
-.ds-nav-item-active {
-  background: rgba(124, 58, 237, 0.12);
-  color: var(--text-primary);
-  border-left: 2px solid var(--accent);
-}
-
-/* ═══════════════════════════════════════════════
-   SHARED COMPONENT: TOGGLE SWITCH
+   TOGGLE SWITCH
    ═══════════════════════════════════════════════ */
 .ds-toggle {
-  width: 36px;
-  height: 20px;
+  width: 44px;
+  height: 24px;
   border-radius: 999px;
   padding: 2px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   border: none;
@@ -416,15 +499,16 @@ input, textarea, select {
   justify-content: flex-end;
 }
 .ds-toggle-knob {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease;
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED COMPONENT: TAB BAR (UNDERLINE STYLE)
+   TAB BAR
    ═══════════════════════════════════════════════ */
 .ds-tab-bar {
   display: flex;
@@ -432,146 +516,163 @@ input, textarea, select {
   gap: 0;
   border-bottom: 1px solid var(--border);
 }
-
 .ds-tab {
-  padding: 10px 16px;
+  padding: 12px 16px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   margin-bottom: -1px;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .ds-tab:hover {
   color: var(--text-secondary);
 }
 .ds-tab-active {
   color: var(--text-primary);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text-primary);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED: INPUT FIELDS (DARK THEME)
+   INPUT FIELDS
    ═══════════════════════════════════════════════ */
 .ds-input {
   width: 100%;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-button);
-  padding: 10px 14px;
+  padding: 10px 12px;
   font-size: 14px;
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.2s ease;
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 .ds-input::placeholder {
   color: var(--text-muted);
 }
 .ds-input:focus {
-  border-color: var(--accent);
+  border-color: var(--text-secondary);
 }
 
 .ds-select {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-button);
-  padding: 10px 14px;
+  padding: 10px 12px;
   font-size: 14px;
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.2s ease;
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 .ds-select:focus {
-  border-color: var(--accent);
+  border-color: var(--text-secondary);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED: PAGE TITLE
-   ═══════════════════════════════════════════════ */
-.ds-page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.ds-page-subtitle {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-/* ═══════════════════════════════════════════════
-   SHARED: DIVIDER ROW
+   ROW COMPONENTS
    ═══════════════════════════════════════════════ */
 .ds-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
 }
 .ds-row:last-child {
   border-bottom: none;
 }
 .ds-row-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
 }
 .ds-row-value {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--accent-light);
+  color: var(--text-primary);
 }
 
 /* ═══════════════════════════════════════════════
-   SHARED: DANGER ZONE
+   DANGER ZONE
    ═══════════════════════════════════════════════ */
 .ds-danger-card {
   background: var(--bg-card);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(237, 73, 86, 0.3);
   border-radius: var(--radius-card);
   padding: var(--card-padding);
 }
 .ds-btn-danger {
   background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--error);
   color: var(--error);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   padding: 8px 16px;
   border-radius: var(--radius-button);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .ds-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: var(--error);
+  background: var(--error);
+  color: #FFFFFF;
 }
 
 /* ═══════════════════════════════════════════════
-   UTILITY: RESPONSIVE SIDEBAR COLLAPSE
+   RESPONSIVE
    ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .ds-sidebar {
+  .ig-sidebar {
     width: 100%;
+    height: auto;
+    position: relative;
+    flex-direction: row;
+    padding: 8px 16px;
     border-right: none;
     border-bottom: 1px solid var(--border);
-    flex-direction: row;
-    padding: 12px 16px;
     overflow-x: auto;
     gap: 4px;
   }
-  .ds-nav-item {
-    white-space: nowrap;
-    height: 32px;
-    font-size: 12px;
+  .ig-sidebar:hover {
+    width: 100%;
   }
+  .ig-nav-item {
+    height: 40px;
+    padding: 0 10px;
+  }
+  .ig-sidebar-logo { display: none; }
+  .ig-nav-label { display: none; }
 }
+
+/* ═══════════════════════════════════════════════
+   BLINKING CURSOR ANIMATION
+   ═══════════════════════════════════════════════ */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.blinking-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background-color: var(--accent);
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: cursorBlink 0.9s infinite;
+}
+.blinking-cursor-white {
+  display: inline-block;
+  width: 2px;
+  height: 13px;
+  background-color: #FFFFFF;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: cursorBlink 0.9s infinite;
+}
+

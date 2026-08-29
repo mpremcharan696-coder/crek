@@ -42,6 +42,9 @@ class Reel(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_reels_user_id", "user_id"),
         Index("ix_reels_media_id", "media_id", unique=True),
+        Index("ix_reels_user_media", "user_id", "media_id"),
+        Index("ix_reels_user_is_analyzed", "user_id", "is_analyzed"),
+        Index("ix_reels_published_at", "published_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -7,6 +7,8 @@ from app.models.base import Base
 from app.models.user import User, UserToken
 from app.models.reel import Reel, ReelSummary
 from app.models.comment import Comment, CommentReply
+from app.models.dm_rule import CommentDMRule
+from app.models.reel_automation import ReelAutomationConfig
 
 __all__ = [
     "Base",
@@ -16,4 +18,6 @@ __all__ = [
     "ReelSummary",
     "Comment",
     "CommentReply",
+    "CommentDMRule",
+    "ReelAutomationConfig",
 ]

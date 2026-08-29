@@ -249,17 +249,12 @@ async def setup_test_user(
 # =========================================================================== #
 
 @router.get("/login", summary="Redirect to Meta OAuth")
-async def login(scope_type: str = "advanced") -> RedirectResponse:
-    """Build the Instagram Business OAuth authorization URL and redirect the user.
-
-    Uses the Instagram OAuth endpoint to redirect real creators for account connection.
-    """
+async def login(scope_type: str = "all") -> RedirectResponse:
+    """Build the Instagram Business OAuth authorization URL and redirect the user."""
     app_id = settings.META_APP_ID or "1925137338445520"
     redirect_uri = settings.META_REDIRECT_URI or "https://pilotly-api-server-543261599288.us-central1.run.app/api/v1/auth/callback"
 
-    scope = "instagram_business_basic"
-    if scope_type == "advanced":
-        scope += ",instagram_business_manage_comments"
+    scope = "instagram_business_basic,instagram_business_manage_comments,instagram_business_manage_messages"
 
     params = {
         "client_id": app_id,
@@ -268,7 +263,7 @@ async def login(scope_type: str = "advanced") -> RedirectResponse:
         "scope": scope,
     }
     auth_url = f"https://www.instagram.com/oauth/authorize?{urlencode(params)}"
-    logger.info("Redirecting user to Instagram OAuth (scope=%s): %s", scope, auth_url)
+    logger.info("Redirecting user to Instagram OAuth: %s", auth_url)
     return RedirectResponse(url=auth_url)
 
 
@@ -280,7 +275,6 @@ async def oauth_callback(
     """Handle the Meta OAuth callback and redirect to frontend with JWT."""
     auth_service = AuthService(db)
     frontend_url = settings.FRONTEND_URL or "https://crekai-gamma.vercel.app"
-
 
     try:
         token_response = await auth_service.handle_oauth_callback(code)
@@ -303,11 +297,17 @@ async def get_me(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return the authenticated user's profile.
+    """Return the authenticated user's profile with Redis caching for hot reads.
 
     Raises:
         HTTPException 404: If the user no longer exists in the DB.
     """
+    from app.core.cache import get_cached_json, set_cached_json
+    cache_key = f"user:{user_id}:profile"
+    cached = await get_cached_json(cache_key)
+    if cached:
+        return cached
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
@@ -316,8 +316,6 @@ async def get_me(
             detail="User not found",
         )
         
-    # Check if latest token has comment/message management scope
-    has_advanced_scopes = False
     token_res = await db.execute(
         select(UserToken)
         .where(UserToken.user_id == user.id)
@@ -325,13 +323,9 @@ async def get_me(
         .limit(1)
     )
     latest_token = token_res.scalar_one_or_none()
-    if latest_token and latest_token.scopes:
-        has_advanced_scopes = any("manage_comments" in s for s in latest_token.scopes)
-    else:
-        # If no scopes array is present (e.g. legacy or seed token), default to true for testing
-        has_advanced_scopes = True
+    has_advanced_scopes = bool(latest_token and user.instagram_user_id)
         
-    return {
+    data = {
         "id": user.id,
         "instagram_user_id": user.instagram_user_id,
         "username": user.username,
@@ -347,6 +341,8 @@ async def get_me(
         "is_active": user.is_active,
         "has_advanced_scopes": has_advanced_scopes,
     }
+    await set_cached_json(cache_key, data, ttl_seconds=300)
+    return data
 
 
 

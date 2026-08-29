@@ -201,6 +201,111 @@ class MetaAPIService:
         logger.info("Liked comment %s", comment_id)
         return True
 
+    async def send_private_reply(
+        self,
+        comment_id: str,
+        message_text: str,
+        token: str,
+        quick_reply_title: str | None = None,
+    ) -> dict:
+        """Send a private Direct Message in response to an Instagram comment (Comment-to-DM).
+
+        Uses Meta's Private Replies API: ``POST /me/messages`` with ``recipient.comment_id``.
+
+        Args:
+            comment_id: Instagram comment ID that triggered the DM.
+            message_text: Initial text prompt to send.
+            token: Valid Meta/Instagram user access token.
+            quick_reply_title: Optional button label (e.g. 'Send me the link').
+
+        Returns:
+            Dict containing Meta message response (e.g. message_id).
+        """
+        url = f"{self.BASE_URL}/me/messages"
+        message_payload: dict[str, Any] = {"text": message_text}
+
+        if quick_reply_title:
+            message_payload["quick_replies"] = [
+                {
+                    "content_type": "text",
+                    "title": quick_reply_title,
+                    "payload": "SEND_LINK_PAYLOAD",
+                }
+            ]
+
+        body = {
+            "recipient": {"comment_id": comment_id},
+            "message": message_payload,
+        }
+
+        # Need json body in request
+        import json
+        if token.startswith("IG") and "graph.facebook.com" in url:
+            url = url.replace("graph.facebook.com", "graph.instagram.com")
+
+        params = {"access_token": token}
+        headers = {"Content-Type": "application/json"}
+
+        response = await self.http_client.post(
+            url,
+            params=params,
+            json=body,
+            headers=headers,
+        )
+
+        if response.status_code >= 400:
+            error_body = self._safe_json(response)
+            error_msg = error_body.get("error", {}).get("message", response.text[:300])
+            logger.warning("Private reply failed for comment %s: %s", comment_id, error_msg)
+            # Try fallback to page_messages endpoint if me/messages fails
+            raise MetaAPIError(f"Private reply failed ({response.status_code}): {error_msg}")
+
+        logger.info("Successfully sent private reply for comment %s", comment_id)
+        return response.json()
+
+    async def send_direct_message(
+        self,
+        recipient_id: str,
+        message_text: str,
+        token: str,
+    ) -> dict:
+        """Send a direct message to an Instagram user IGSID.
+
+        Args:
+            recipient_id: Instagram user IGSID.
+            message_text: Message text to deliver.
+            token: Valid Meta access token.
+
+        Returns:
+            Dict containing message response.
+        """
+        url = f"{self.BASE_URL}/me/messages"
+        if token.startswith("IG") and "graph.facebook.com" in url:
+            url = url.replace("graph.facebook.com", "graph.instagram.com")
+
+        params = {"access_token": token}
+        headers = {"Content-Type": "application/json"}
+        body = {
+            "recipient": {"id": recipient_id},
+            "message": {"text": message_text},
+        }
+
+        response = await self.http_client.post(
+            url,
+            params=params,
+            json=body,
+            headers=headers,
+        )
+
+        if response.status_code >= 400:
+            error_body = self._safe_json(response)
+            error_msg = error_body.get("error", {}).get("message", response.text[:300])
+            logger.warning("Direct message to %s failed: %s", recipient_id, error_msg)
+            raise MetaAPIError(f"Direct message failed ({response.status_code}): {error_msg}")
+
+        logger.info("Successfully sent direct message to %s", recipient_id)
+        return response.json()
+
     # ------------------------------------------------------------------
     # Internal request handler
     # ------------------------------------------------------------------

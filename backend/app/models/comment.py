@@ -45,6 +45,8 @@ class Comment(Base):
         Index("ix_comments_reel_id", "reel_id"),
         Index("ix_comments_comment_id", "comment_id", unique=True),
         Index("ix_comments_is_processed", "is_processed"),
+        Index("ix_comments_reel_is_processed", "reel_id", "is_processed"),
+        Index("ix_comments_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -103,6 +105,8 @@ class CommentReply(Base):
     __tablename__ = "comment_replies"
     __table_args__ = (
         Index("ix_comment_replies_status", "status"),
+        Index("ix_comment_replies_comment_id", "comment_id"),
+        Index("ix_comment_replies_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

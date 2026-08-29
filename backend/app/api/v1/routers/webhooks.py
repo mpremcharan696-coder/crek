@@ -137,6 +137,66 @@ async def handle_webhook(request: Request) -> dict[str, str]:
     enqueued_count = 0
 
     for entry in entries:
+        # Handle Instagram Direct Messaging Quick Replies (Button Clicks e.g. "Send me the link")
+        messaging_events: list[dict[str, Any]] = entry.get("messaging", [])
+        for m_evt in messaging_events:
+            sender_id = m_evt.get("sender", {}).get("id")
+            recipient_id = m_evt.get("recipient", {}).get("id")  # Creator IG ID
+            msg_obj = m_evt.get("message", {})
+            quick_reply_payload = msg_obj.get("quick_reply", {}).get("payload")
+            msg_text = msg_obj.get("text", "").strip().lower()
+
+            if sender_id and (quick_reply_payload == "SEND_LINK_PAYLOAD" or "link" in msg_text or "guide" in msg_text):
+                try:
+                    import asyncio
+                    from app.db.session import AsyncSessionLocal
+                    from app.models.user import User, UserToken
+                    from app.models.dm_rule import CommentDMRule
+                    from app.services.meta_api_service import MetaAPIService
+                    from app.core.security import decrypt_token
+                    from sqlalchemy import select
+
+                    async def _send_step2_payload(creator_ig_id: str, fan_ig_id: str):
+                        async with AsyncSessionLocal() as session:
+                            u_res = await session.execute(select(User).where(User.instagram_user_id == creator_ig_id))
+                            creator = u_res.scalar_one_or_none()
+                            if not creator:
+                                return
+                            # Find global or active rule
+                            r_res = await session.execute(
+                                select(CommentDMRule)
+                                .where(CommentDMRule.user_id == creator.id, CommentDMRule.is_enabled == True)
+                                .order_by(CommentDMRule.reel_id.nulls_last())
+                                .limit(1)
+                            )
+                            active_rule = r_res.scalar_one_or_none()
+                            if not active_rule:
+                                return
+
+                            # Get token
+                            t_res = await session.execute(
+                                select(UserToken).where(UserToken.user_id == creator.id).order_by(UserToken.expires_at.desc()).limit(1)
+                            )
+                            t_row = t_res.scalar_one_or_none()
+                            if not t_row:
+                                return
+                            token = decrypt_token(t_row.encrypted_access_token)
+
+                            delivery_text = active_rule.payload_message or "Here is your link:"
+                            if active_rule.payload_url:
+                                delivery_text = f"{delivery_text}\n\n🔗 {active_rule.payload_url}"
+
+                            api = MetaAPIService()
+                            try:
+                                await api.send_direct_message(fan_ig_id, delivery_text, token)
+                            finally:
+                                await api.http_client.aclose()
+
+                    asyncio.create_task(_send_step2_payload(recipient_id, sender_id))
+                    logger.info("Triggered step-2 DM payload delivery to %s", sender_id)
+                except Exception as exc:
+                    logger.warning("Error processing messaging quick reply: %s", exc)
+
         changes: list[dict[str, Any]] = entry.get("changes", [])
         for change in changes:
             field: str = change.get("field", "")

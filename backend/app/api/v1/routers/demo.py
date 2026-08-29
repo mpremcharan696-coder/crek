@@ -44,34 +44,47 @@ RULES:
         {"role": "user", "content": f"Comment: \"{request.comment}\"\n\nReply as {b_name}."}
     ]
     
-    groq_api_key = settings.GROQ_API_KEY
-    if hasattr(groq_api_key, "get_secret_value"):
-        groq_api_key = groq_api_key.get_secret_value()
+    keys_to_try = [
+        k for k in [
+            settings.GROQ_API_KEY,
+            getattr(settings, "GROQ_API_KEY_SECONDARY", "")
+        ] if k and "placeholder" not in k
+    ]
+
+    reply_text = ""
+    for api_key in keys_to_try:
+        if hasattr(api_key, "get_secret_value"):
+            api_key = api_key.get_secret_value()
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "qwen/qwen3.6-27b",
+                        "messages": messages,
+                        "temperature": 0.7,
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        raw_content = choices[0].get("message", {}).get("content", "")
+                        import re
+                        cleaned = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL)
+                        cleaned = re.sub(r"<\/?think>", "", cleaned).strip()
+                        reply_text = cleaned if cleaned else raw_content.strip()
+                        break
+        except Exception:
+            continue
+
+    if not reply_text:
+        reply_text = "Thanks for your comment! Appreciate the support."
         
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "qwen/qwen3.6-27b",
-                "messages": messages,
-                "temperature": 0.7,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        choices = data.get("choices", [])
-        reply_text = ""
-        if choices:
-            raw_content = choices[0].get("message", {}).get("content", "")
-            import re
-            cleaned = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL)
-            cleaned = re.sub(r"<\/?think>", "", cleaned).strip()
-            reply_text = cleaned if cleaned else raw_content.strip()
-            
     return DemoReplyResponse(reply=reply_text, mode_used=selected_mode)
 
 
