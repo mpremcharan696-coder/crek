@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toggle, Select, Accordion, SettingRow, TextInput, useTheme } from './components/ui';
 import AutomationSetup from './AutomationSetup';
 import CommentDMSetup from './CommentDMSetup';
 import InstagramCommentPreview from './InstagramCommentPreview';
@@ -139,8 +140,12 @@ export default function Dashboard({ user, onSignOut }) {
   const [selectedReel, setSelectedReel] = useState(null);
   const [fetchingReelDetail, setFetchingReelDetail] = useState(false);
 
+  // Theme (light / dark) — CSS variables handle the rest
+  const [theme, setTheme] = useTheme();
+
   // Comment-to-DM Rules
   const [dmRules, setDmRules] = useState([]);
+  const [dmAutomationEnabled, setDmAutomationEnabled] = useState(false);
   const [newKeywordInput, setNewKeywordInput] = useState('');
   const [newDmMessageInput, setNewDmMessageInput] = useState('');
 
@@ -317,16 +322,25 @@ export default function Dashboard({ user, onSignOut }) {
 
   const toggleAutoReplySetting = async () => {
     if (!apiUser) return;
+    const prevUser = apiUser;
     const nextVal = !apiUser.auto_reply_enabled;
+    // Optimistic update: the switch reflects the new state immediately,
+    // then reconciles with (or rolls back to) the server response.
+    setApiUser({ ...apiUser, auto_reply_enabled: nextVal });
     try {
       const updated = await updateUserSettings({
         auto_reply_enabled: nextVal,
         reply_tone: apiUser.reply_tone || 'friendly',
         reply_style: apiUser.reply_style || 'casual',
       });
-      setApiUser(updated);
+      setApiUser((cur) => ({
+        ...cur,
+        ...(updated || {}),
+        auto_reply_enabled: updated?.auto_reply_enabled ?? nextVal,
+      }));
       showNotification(`Success: Auto-Reply turned ${nextVal ? 'ON' : 'OFF'}`);
     } catch (err) {
+      setApiUser(prevUser);
       showNotification(`Error: ${err.message || 'Failed to update settings'}`);
     }
   };
@@ -348,20 +362,24 @@ export default function Dashboard({ user, onSignOut }) {
 
   const handleUpdateVoiceConfig = async (key, value) => {
     if (!apiUser) return;
+    const prevUser = apiUser;
     let styleObj = {};
     try { styleObj = JSON.parse(apiUser?.reply_style || '{}'); } catch(e) {}
     styleObj[key] = value;
 
+    const payload = {
+      auto_reply_enabled: key === 'auto_reply_enabled' ? value : (apiUser.auto_reply_enabled || false),
+      reply_tone: key === 'persona' ? value : (apiUser.reply_tone || 'friendly'),
+      reply_style: JSON.stringify(styleObj),
+    };
+    // Optimistic update so toggles and dropdowns respond instantly
+    setApiUser({ ...apiUser, ...payload });
     try {
-      const payload = {
-        auto_reply_enabled: key === 'auto_reply_enabled' ? value : (apiUser.auto_reply_enabled || false),
-        reply_tone: key === 'persona' ? value : (apiUser.reply_tone || 'friendly'),
-        reply_style: JSON.stringify(styleObj),
-      };
       const updated = await updateUserSettings(payload);
-      setApiUser(updated);
+      setApiUser((cur) => ({ ...cur, ...(updated || {}) }));
       showNotification('Setting updated successfully');
     } catch (err) {
+      setApiUser(prevUser);
       showNotification(`Error: ${err.message || 'Failed to update setting'}`);
     }
   };
@@ -729,13 +747,17 @@ export default function Dashboard({ user, onSignOut }) {
                     <span>Back to My Automations</span>
                   </button>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span className={`ds-badge ${apiUser?.auto_reply_enabled ? 'ds-badge-success' : 'ds-badge-muted'}`}>
-                      {apiUser?.auto_reply_enabled ? '● Active' : '○ Paused'}
-                    </span>
-                    <button onClick={toggleAutoReplySetting} className="ds-btn-ghost" style={{ padding: '8px 16px', fontSize: 12 }}>
-                      {apiUser?.auto_reply_enabled ? 'Pause Automation' : 'Enable Automation'}
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className={`ds-badge ${apiUser?.auto_reply_enabled ? 'ds-badge-success' : 'ds-badge-muted'}`}>
+                        {apiUser?.auto_reply_enabled ? '● Active' : '○ Paused'}
+                      </span>
+                      <Toggle
+                        checked={Boolean(apiUser?.auto_reply_enabled)}
+                        onChange={toggleAutoReplySetting}
+                        label="Enable AI reply automation"
+                      />
+                    </div>
                     <button onClick={() => navigateTo('#/setup-wizard')} className="ds-btn-primary" style={{ padding: '8px 16px', fontSize: 12 }}>
                       Edit Setup
                     </button>
@@ -806,11 +828,15 @@ export default function Dashboard({ user, onSignOut }) {
                           </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--element-gap)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--element-gap)' }}>
                           {/* Identity & Niche */}
-                          <div className="ds-card">
-                            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Identity & Niche</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                          <Accordion
+                            title="Identity & Niche"
+                            subtitle={styleObj.business_name || apiUser?.full_name || apiUser?.username || 'Brand identity'}
+                            defaultOpen
+                            icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, paddingTop: 10 }}>
                               <div><span style={{ color: 'var(--text-muted)' }}>Business Name:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4 }}>{styleObj.business_name || apiUser?.full_name || apiUser?.username || 'N/A'}</span></div>
                               <div><span style={{ color: 'var(--text-muted)' }}>Industry:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.industry || 'General Content Creator'}</span></div>
                               <div>
@@ -818,12 +844,15 @@ export default function Dashboard({ user, onSignOut }) {
                                 <p style={{ color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{styleObj.audience || 'Not specified'}</p>
                               </div>
                             </div>
-                          </div>
+                          </Accordion>
 
                           {/* Voice & Persona */}
-                          <div className="ds-card">
-                            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Voice & Persona</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                          <Accordion
+                            title="Voice & Persona"
+                            subtitle={`${styleObj.persona || 'Founder'} · Formality ${styleObj.formality || 3}/5`}
+                            icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, paddingTop: 10 }}>
                               <div><span style={{ color: 'var(--text-muted)' }}>Persona:</span> <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginLeft: 4, textTransform: 'capitalize' }}>{styleObj.persona || 'Founder'}</span></div>
                               <div><span style={{ color: 'var(--text-muted)' }}>Formality Level:</span> <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginLeft: 4 }}>{styleObj.formality || 3} / 5</span></div>
                               <div>
@@ -841,19 +870,24 @@ export default function Dashboard({ user, onSignOut }) {
                                 </div>
                               )}
                             </div>
-                          </div>
-                        </div>
+                          </Accordion>
 
-                        {/* Knowledge Base */}
-                        <div className="ds-card">
-                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Knowledge Base & FAQs</div>
-                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
-                        </div>
+                          {/* Knowledge Base */}
+                          <Accordion
+                            title="Knowledge Base & FAQs"
+                            subtitle={styleObj.knowledge ? `${styleObj.knowledge.slice(0, 64)}…` : 'No custom knowledge base configured'}
+                            icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>}
+                          >
+                            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line', paddingTop: 10 }}>{styleObj.knowledge || 'No custom knowledge base configured.'}</p>
+                          </Accordion>
 
-                        {/* Safety & Guardrails */}
-                        <div className="ds-card">
-                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-light)', marginBottom: 12 }}>Safety & Guardrails</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                          {/* Safety & Guardrails */}
+                          <Accordion
+                            title="Safety & Guardrails"
+                            subtitle={`${styleObj.avoid_words?.length || 0} avoided words · ${styleObj.avoid_topics?.length || 0} skipped topics · ${styleObj.dm_topics?.length || 0} DM redirects`}
+                            icon={<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
+                          >
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, paddingTop: 10 }}>
                             <div>
                               <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 6, fontSize: 11 }}>Avoid Words:</span>
                               {styleObj.avoid_words?.length > 0 ? (
@@ -885,7 +919,8 @@ export default function Dashboard({ user, onSignOut }) {
                               ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>None</span>}
                             </div>
                           </div>
-                        </div>
+                        </Accordion>
+                      </div>
 
                         {/* Active Settings Row */}
                         <div className="ds-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -1101,22 +1136,19 @@ export default function Dashboard({ user, onSignOut }) {
                       </div>
                     </div>
 
-                    {/* Enable / Disable Toggle Switch */}
+                    {/* Enable / Disable Toggle Switch (controlled — knob always matches state) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span className={`ds-badge ${dmRules.length > 0 ? 'ds-badge-success' : 'ds-badge-muted'}`} style={{ fontSize: 11 }}>
-                        {dmRules.length > 0 ? '● Enabled' : 'Disabled'}
+                      <span className={`ds-badge ${dmAutomationEnabled ? 'ds-badge-success' : 'ds-badge-muted'}`} style={{ fontSize: 11 }}>
+                        {dmAutomationEnabled ? '● Enabled' : 'Disabled'}
                       </span>
-                      <button
-                        onClick={() => {
-                          const nextState = dmRules.length === 0;
-                          showNotification(`Comment-to-DM ${nextState ? 'enabled' : 'disabled'}`);
+                      <Toggle
+                        checked={dmAutomationEnabled}
+                        onChange={(next) => {
+                          setDmAutomationEnabled(next);
+                          showNotification(`Comment-to-DM ${next ? 'enabled' : 'disabled'}`);
                         }}
-                        className={`ds-toggle ${dmRules.length > 0 ? 'ds-toggle-on' : 'ds-toggle-off'}`}
-                        style={{ width: 44, height: 24, flexShrink: 0 }}
-                        title="Toggle Comment-to-DM"
-                      >
-                        <span className="ds-toggle-knob" style={{ width: 20, height: 20 }} />
-                      </button>
+                        label="Toggle Comment-to-DM"
+                      />
                     </div>
                   </div>
 

@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""                  # Web search API key
     OPENROUTER_API_KEY: str = "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"
 
+    # ── Experiential Gateway ──────────────────────────────────────────────
+    EXPLABS_API_KEY: str = ""                 # Experiential API key from EXPLABS_API_KEY
+    EXPERIENTIAL_BASE_URL: str = "https://api.experientiallabs.ai/v1"
+    EXPERIENTIAL_MODEL: str = "claude-fable-5"
+    EXPERIENTIAL_MODEL_FABLE: str = "claude-fable-5"
+    EXPERIENTIAL_MODEL_ASTRA: str = "gpt-6-astra"
+    EXPERIENTIAL_MODEL_KIMI: str = "kimi-k3"
+
 
     # ── Security ────────────────────────────────────────────────────────
     ENCRYPTION_KEY: str  # Fernet key for token-at-rest encryption
